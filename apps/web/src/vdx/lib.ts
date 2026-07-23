@@ -267,12 +267,16 @@ export interface TimelineLayout {
   durationSec: number;
 }
 
-/** Full class strings so Tailwind's scanner picks them up. */
+/**
+ * Full class strings so Tailwind's scanner picks them up. Exact Black Mamba
+ * hues (docs/black-mamba-workspace-design.md §3 agent-role colors) — no
+ * borders, per the design key's "no strokes anywhere" rule.
+ */
 export const ELEMENT_COLORS: Record<ElementType, string> = {
-  video: "bg-indigo-500/80 border-indigo-400 text-indigo-50",
-  image: "bg-teal-500/80 border-teal-400 text-teal-50",
-  text: "bg-amber-500/80 border-amber-400 text-amber-950",
-  audio: "bg-emerald-500/80 border-emerald-400 text-emerald-50",
+  video: "bg-[#6e8be8]/85 text-white",
+  image: "bg-[#5bbf97]/85 text-[#0a1410]",
+  text: "bg-[#c9892f]/85 text-[#1a1305]",
+  audio: "bg-[#c084fc]/85 text-[#1a0f22]",
 };
 
 /**

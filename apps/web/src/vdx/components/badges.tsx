@@ -21,23 +21,30 @@ export function KindIcon({ kind, className }: { kind: AssetKind; className?: str
   );
 }
 
-/** Full class strings so Tailwind's scanner picks them up. */
+/**
+ * Full class strings so Tailwind's scanner picks them up. Black Mamba only
+ * defines 5 chromatic hues (docs/black-mamba-workspace-design.md §3: the
+ * accent red plus 4 agent-role colors) — the 5 most distinct entity types
+ * get one hue each; the rest stay neutral rather than inventing hues the
+ * design key doesn't have. No borders — "no strokes/borders anywhere",
+ * depth via fill only for a chip this small.
+ */
 export const ENTITY_BADGE: Record<EntityType, string> = {
-  character: "bg-violet-500/15 text-violet-300 border-violet-400/30",
-  location: "bg-sky-500/15 text-sky-300 border-sky-400/30",
-  scene: "bg-cyan-500/15 text-cyan-300 border-cyan-400/30",
-  style: "bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-400/30",
-  prop: "bg-orange-500/15 text-orange-300 border-orange-400/30",
-  voice: "bg-emerald-500/15 text-emerald-300 border-emerald-400/30",
-  brief: "bg-amber-500/15 text-amber-300 border-amber-400/30",
-  other: "bg-zinc-500/15 text-zinc-300 border-zinc-400/30",
+  character: "bg-[#c084fc]/15 text-[#c084fc]", // violet — Designer
+  location: "bg-[#6e8be8]/15 text-[#6e8be8]", // blue — Researcher
+  scene: "bg-[#5bbf97]/15 text-[#5bbf97]", // green — Reviewer
+  style: "bg-[#c9892f]/15 text-[#c9892f]", // amber — Builder
+  brief: "bg-[#d84c4c]/15 text-[#d84c4c]", // red — accent
+  prop: "bg-[#151418] text-[#b6b5bb]",
+  voice: "bg-[#151418] text-[#b6b5bb]",
+  other: "bg-[#151418] text-[#7c7a82]",
 };
 
 export function EntityBadge({ type }: { type: EntityType }) {
   const cls = ENTITY_BADGE[type] ?? ENTITY_BADGE.other;
   return (
     <span
-      className={`inline-flex shrink-0 items-center rounded-full border px-1.5 py-px text-[10px] font-medium uppercase tracking-wide ${cls}`}
+      className={`inline-flex shrink-0 items-center rounded-full px-1.5 py-px text-[10px] font-medium uppercase tracking-wide ${cls}`}
     >
       {type}
     </span>
@@ -56,9 +63,7 @@ export function EntityChip({
 }) {
   const cls = ENTITY_BADGE[type] ?? ENTITY_BADGE.other;
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] ${cls}`}
-    >
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] ${cls}`}>
       {type} · {name}
       {created ? <span className="opacity-70">(new)</span> : null}
     </span>

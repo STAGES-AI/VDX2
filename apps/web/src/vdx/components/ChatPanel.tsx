@@ -26,23 +26,19 @@ interface ChatPanelProps {
 
 function UploadCard({ item }: { item: UploadResultItem }) {
   return (
-    <div className="mr-8 rounded-lg border border-border bg-card px-3 py-2 text-sm">
+    <div className="vdx-panel mr-8 px-3 py-2 text-sm">
       <div className="flex items-center gap-2">
         <KindIcon kind={item.kind} className="size-4 shrink-0 fill-current text-muted-foreground" />
         <span className="min-w-0 truncate font-medium" title={item.name}>
           {item.name}
         </span>
-        <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">
+        <span className="ml-auto shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
           {fmtBytes(item.sizeBytes)}
         </span>
-        {item.duplicate ? (
-          <span className="shrink-0 rounded-full border border-border bg-muted px-1.5 py-px text-[10px] text-muted-foreground">
-            duplicate
-          </span>
-        ) : null}
+        {item.duplicate ? <span className="vdx-chip shrink-0">duplicate</span> : null}
       </div>
       {item.organization ? (
-        <div className="mt-1.5 border-t border-border/60 pt-1.5">
+        <div className="vdx-divider-t mt-1.5 pt-1.5">
           <p className="text-xs text-muted-foreground">{item.organization.summary}</p>
           {item.organization.linkedEntities.length > 0 ? (
             <div className="mt-1.5 flex flex-wrap gap-1">
@@ -69,7 +65,7 @@ function Message({
   switch (message.kind) {
     case "user":
       return (
-        <div className="ml-8 rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground">
+        <div className="ml-8 rounded-2xl rounded-br-sm bg-primary px-3.5 py-2 text-sm text-primary-foreground shadow-[0_6px_16px_rgba(216,76,76,0.22)]">
           {message.text}
         </div>
       );
@@ -81,10 +77,10 @@ function Message({
       return <UploadCard item={message.item} />;
     case "reply":
       return (
-        <div className="mr-8 rounded-lg border border-border bg-card px-3 py-2 text-sm">
+        <div className="vdx-panel mr-8 px-3 py-2 text-sm">
           <p>{message.text}</p>
           {message.applied.length > 0 ? (
-            <ul className="mt-1.5 space-y-0.5 border-t border-border/60 pt-1.5 text-xs text-muted-foreground">
+            <ul className="vdx-divider-t mt-1.5 space-y-0.5 pt-1.5 text-xs text-muted-foreground">
               {message.applied.map((a, i) => (
                 <li key={i}>✓ {a}</li>
               ))}
@@ -94,14 +90,14 @@ function Message({
       );
     case "error":
       return (
-        <div className="mr-8 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <div className="mr-8 rounded-[10px] bg-[#d84c4c]/12 px-3 py-2 text-sm text-[#ff8080] shadow-[inset_0_0_0_1px_rgba(216,76,76,0.18)]">
           {message.text}
         </div>
       );
     case "status":
       return (
-        <div className="flex items-center gap-2 px-1 text-xs text-muted-foreground">
-          <span className="inline-block size-1.5 shrink-0 rounded-full bg-muted-foreground/50" />
+        <div className="flex items-center gap-2 px-1 font-mono text-[11px] text-muted-foreground">
+          <span className="inline-block size-1.5 shrink-0 rounded-full bg-[#6e8be8]/70" />
           <span className="truncate" title={message.text}>
             {message.stage !== "info" ? (
               <span className="mr-1 font-medium uppercase tracking-wide text-foreground/60">
@@ -115,8 +111,7 @@ function Message({
   }
 }
 
-const ACTION_BTN =
-  "rounded-md border border-border bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40";
+const ACTION_BTN = "vdx-pill-ghost px-3 py-1.5 text-xs font-medium";
 
 const TOGGLE_LABEL =
   "flex cursor-pointer select-none items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground";
@@ -168,7 +163,9 @@ export function ChatPanel(props: ChatPanelProps) {
       <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto p-3">
         {messages.length === 0 && !showPinnedPlan ? (
           <div className="mt-10 px-4 text-center text-sm text-muted-foreground">
-            <p className="font-heading text-lg text-foreground/80">Direct a video</p>
+            <p className="font-heading text-base uppercase tracking-wide text-foreground/85">
+              Direct a video
+            </p>
             <p className="mt-2">
               Describe the video you want — the first message creates a project and the director
               gets to work. After that, chat to edit it. Drop files anywhere (or use the paperclip)
@@ -189,7 +186,7 @@ export function ChatPanel(props: ChatPanelProps) {
         ))}
       </div>
 
-      <div className="border-t border-border p-3">
+      <div className="vdx-divider-t p-3">
         <div className="mb-2 flex flex-wrap gap-1.5">
           <button type="button" className={ACTION_BTN} disabled={!hasProject || busy} onClick={onUndo}>
             Undo
@@ -236,7 +233,7 @@ export function ChatPanel(props: ChatPanelProps) {
             type="button"
             title="Attach files"
             aria-label="Attach files"
-            className="flex size-9 shrink-0 items-center justify-center self-end rounded-md border border-border bg-secondary text-secondary-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+            className="vdx-pill-ghost flex size-9 shrink-0 items-center justify-center self-end"
             disabled={uploading}
             onClick={() => fileInputRef.current?.click()}
           >
@@ -253,7 +250,8 @@ export function ChatPanel(props: ChatPanelProps) {
             )}
           </button>
           <textarea
-            className="min-h-9 flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="vdx-well min-h-9 flex-1 resize-none border-0 px-3.5 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+            style={{ borderRadius: 18 }}
             rows={2}
             placeholder={hasProject ? "Edit the video… (e.g. “make the title bigger”)" : "Describe the video to create…"}
             value={draft}
@@ -267,7 +265,7 @@ export function ChatPanel(props: ChatPanelProps) {
           />
           <button
             type="submit"
-            className="self-end rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            className="vdx-pill self-end px-4 py-2 text-sm"
             disabled={busy || draft.trim().length === 0}
           >
             {busy ? "Working…" : "Send"}

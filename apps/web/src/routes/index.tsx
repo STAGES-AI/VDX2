@@ -24,13 +24,6 @@ export const Route = createFileRoute('/')({ component: Home, ssr: false })
 type LeftTab = 'chat' | 'library'
 type RightTab = 'canvas' | 'storyboard' | 'timeline'
 
-const TAB_BTN = (active: boolean) =>
-  `rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-    active
-      ? 'bg-secondary text-secondary-foreground'
-      : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
-  }`
-
 function Home() {
   const director = useDirector()
   const {
@@ -147,12 +140,12 @@ function Home() {
       onDrop={onDrop}
     >
       {/* Header */}
-      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-4">
-        <h1 className="font-heading text-lg font-semibold">VDX Director</h1>
+      <header className="vdx-divider-b flex h-12 shrink-0 items-center gap-3 bg-sidebar px-4">
+        <h1 className="font-heading text-base font-semibold tracking-tight">VDX·DIRECTOR</h1>
         <span className="text-xs text-muted-foreground">agent video editor</span>
         <div className="ml-auto flex items-center gap-2">
           <select
-            className="h-8 max-w-56 rounded-md border border-input bg-background px-2 text-xs"
+            className="vdx-well h-8 max-w-56 border-0 bg-transparent px-3 text-xs text-foreground outline-none"
             value={projectId ?? ''}
             disabled={busy}
             onFocus={refreshProjectList}
@@ -174,25 +167,33 @@ function Home() {
       <div ref={bodyRef} className="relative flex min-h-0 flex-1">
         {/* Left: chat / library */}
         <aside
-          className="flex shrink-0 flex-col border-r border-border"
+          className="vdx-divider-r flex shrink-0 flex-col bg-sidebar"
           style={{ width: leftWidth }}
         >
-          <div className="flex shrink-0 items-center gap-1 border-b border-border px-2 py-1.5">
-            <button type="button" className={TAB_BTN(leftTab === 'chat')} onClick={() => setLeftTab('chat')}>
-              Chat
-            </button>
-            <button
-              type="button"
-              className={TAB_BTN(leftTab === 'library')}
-              onClick={() => setLeftTab('library')}
-            >
-              Library
-              {library ? (
-                <span className="ml-1 text-[10px] text-muted-foreground">
-                  {library.assets.length + library.entities.length}
-                </span>
-              ) : null}
-            </button>
+          <div className="vdx-divider-b flex shrink-0 items-center px-2 py-2">
+            <div className="vdx-seg">
+              <span
+                role="tab"
+                data-active={leftTab === 'chat'}
+                className="vdx-seg-item"
+                onClick={() => setLeftTab('chat')}
+              >
+                Chat
+              </span>
+              <span
+                role="tab"
+                data-active={leftTab === 'library'}
+                className="vdx-seg-item"
+                onClick={() => setLeftTab('library')}
+              >
+                Library
+                {library ? (
+                  <span className="ml-1.5 font-mono text-[9px] text-muted-foreground">
+                    {library.assets.length + library.entities.length}
+                  </span>
+                ) : null}
+              </span>
+            </div>
           </div>
           <div className="min-h-0 flex-1">
             {leftTab === 'chat' ? (
@@ -233,28 +234,33 @@ function Home() {
             className="flex shrink-0 flex-col"
             style={{ flexBasis: `${bottomFrac * 100}%`, flexGrow: 0, flexShrink: 0, minHeight: 220 }}
           >
-            <div className="flex shrink-0 items-center gap-1 border-b border-border px-2 py-1">
-              <button
-                type="button"
-                className={TAB_BTN(rightTab === 'canvas')}
-                onClick={() => setRightTab('canvas')}
-              >
-                Canvas
-              </button>
-              <button
-                type="button"
-                className={TAB_BTN(rightTab === 'storyboard')}
-                onClick={() => setRightTab('storyboard')}
-              >
-                Storyboard
-              </button>
-              <button
-                type="button"
-                className={TAB_BTN(rightTab === 'timeline')}
-                onClick={() => setRightTab('timeline')}
-              >
-                Timeline
-              </button>
+            <div className="vdx-divider-b flex shrink-0 items-center px-2 py-2">
+              <div className="vdx-seg">
+                <span
+                  role="tab"
+                  data-active={rightTab === 'canvas'}
+                  className="vdx-seg-item"
+                  onClick={() => setRightTab('canvas')}
+                >
+                  Canvas
+                </span>
+                <span
+                  role="tab"
+                  data-active={rightTab === 'storyboard'}
+                  className="vdx-seg-item"
+                  onClick={() => setRightTab('storyboard')}
+                >
+                  Storyboard
+                </span>
+                <span
+                  role="tab"
+                  data-active={rightTab === 'timeline'}
+                  className="vdx-seg-item"
+                  onClick={() => setRightTab('timeline')}
+                >
+                  Timeline
+                </span>
+              </div>
             </div>
             <div className="min-h-0 flex-1">
               {rightTab === 'canvas' ? (

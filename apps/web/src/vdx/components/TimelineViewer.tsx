@@ -3,11 +3,11 @@ import { ELEMENT_COLORS, buildTimelineRows, fmtClock, rulerMarks } from "../lib"
 import type { RowKind } from "../lib";
 import type { TProject } from "../types";
 
-const LABEL_COL = "w-32 shrink-0 border-r border-border px-2";
+const LABEL_COL = "vdx-divider-r w-32 shrink-0 px-2";
 
 const ROW_TINT: Record<RowKind, string> = {
   overlay: "bg-background",
-  main: "bg-muted/40",
+  main: "bg-[var(--bm-well)]/50",
   audio: "bg-background",
 };
 
@@ -30,7 +30,7 @@ export function TimelineViewer({ project }: { project: TProject | null }) {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Ruler */}
-      <div className="flex h-6 shrink-0 border-b border-border text-[10px] text-muted-foreground">
+      <div className="vdx-divider-b flex h-6 shrink-0 font-mono text-[10px] text-muted-foreground">
         <div className={`${LABEL_COL} flex items-center font-medium uppercase tracking-wide`}>
           {fmtClock(durationSec)} total
         </div>
@@ -38,7 +38,7 @@ export function TimelineViewer({ project }: { project: TProject | null }) {
           {marks.map((sec) => (
             <div
               key={sec}
-              className="absolute top-0 h-full border-l border-border/70 pl-1 leading-6"
+              className="absolute top-0 h-full pl-1 leading-6 shadow-[-1px_0_0_rgba(255,255,255,0.06)]"
               style={{ left: `${(sec / safeDuration) * 100}%` }}
             >
               {fmtClock(sec)}
@@ -53,10 +53,7 @@ export function TimelineViewer({ project }: { project: TProject | null }) {
           <div className="p-3 text-xs text-muted-foreground">No tracks yet</div>
         ) : (
           rows.map((row) => (
-            <div
-              key={row.key}
-              className={`flex h-9 border-b border-border/60 ${ROW_TINT[row.kind]}`}
-            >
+            <div key={row.key} className={`vdx-divider-b flex h-9 ${ROW_TINT[row.kind]}`}>
               <div
                 className={`${LABEL_COL} flex items-center truncate text-[10px] font-medium uppercase tracking-wide ${
                   row.kind === "main" ? "text-foreground/80" : "text-muted-foreground"
@@ -69,7 +66,7 @@ export function TimelineViewer({ project }: { project: TProject | null }) {
                 {row.elements.map((el) => (
                   <div
                     key={el.id}
-                    className={`absolute inset-y-1 min-w-0.5 overflow-hidden rounded-sm border px-1 text-[10px] leading-6 ${ELEMENT_COLORS[el.type]}`}
+                    className={`absolute inset-y-1 min-w-0.5 overflow-hidden rounded-[6px] px-1.5 font-mono text-[10px] leading-6 ${ELEMENT_COLORS[el.type]}`}
                     style={{ left: `${el.leftPct}%`, width: `${el.widthPct}%` }}
                     title={`${el.name}\n${fmtClock(el.startSec)} → ${fmtClock(el.endSec)} (${(
                       el.endSec - el.startSec

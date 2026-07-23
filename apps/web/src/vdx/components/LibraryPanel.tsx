@@ -20,12 +20,12 @@ function AssetRow({ asset }: { asset: LibraryAsset }) {
     .filter(Boolean)
     .join(" · ");
   return (
-    <div className="flex items-center gap-2 rounded-md border border-border/60 bg-card/60 px-2 py-1.5">
+    <div className="flex items-center gap-2 rounded-[8px] bg-[var(--bm-raised)] px-2 py-1.5">
       <KindIcon kind={asset.kind} className="size-4 shrink-0 fill-current text-muted-foreground" />
       <span className="min-w-0 flex-1 truncate text-xs" title={asset.name}>
         {asset.name}
       </span>
-      <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">{detail}</span>
+      <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">{detail}</span>
     </div>
   );
 }
@@ -63,7 +63,7 @@ export function LibraryPanel({ library }: { library: LibraryResponse | null }) {
                 {group.map((asset) => (
                   <figure
                     key={asset.assetId}
-                    className="overflow-hidden rounded-md border border-border/60 bg-card/60"
+                    className="overflow-hidden rounded-[8px] bg-[var(--bm-raised)]"
                     title={`${asset.name} · ${fmtBytes(asset.sizeBytes)}`}
                   >
                     <img
@@ -96,7 +96,7 @@ export function LibraryPanel({ library }: { library: LibraryResponse | null }) {
           </h3>
           <div className="space-y-1.5">
             {entities.map((entity) => (
-              <div key={entity.id} className="rounded-md border border-border/60 bg-card/60 p-2">
+              <div key={entity.id} className="rounded-[8px] bg-[var(--bm-raised)] p-2">
                 <div className="flex items-center gap-2">
                   <EntityBadge type={entity.type} />
                   <span className="min-w-0 truncate text-xs font-medium" title={entity.name}>

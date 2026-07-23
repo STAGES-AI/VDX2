@@ -78,14 +78,13 @@ function ShotCard({
   return (
     <div
       ref={ref}
-      className={`flex flex-col overflow-hidden rounded-lg border bg-card text-sm shadow-sm ${
-        selected ? "border-primary ring-2 ring-primary/40" : "border-border"
-      }`}
+      className="vdx-panel flex flex-col overflow-hidden text-sm"
+      style={selected ? { boxShadow: "0 0 0 1px #d84c4c, 0 14px 34px -8px rgba(0,0,0,0.55)" } : undefined}
     >
       <div className="relative">
         <Thumb take={selectedTake} label={shot.id} />
         {selectedTake?.url ? (
-          <span className="absolute bottom-1 right-1 rounded-sm bg-indigo-500/80 px-1.5 py-px text-[9px] font-medium uppercase tracking-wide text-indigo-50">
+          <span className="absolute bottom-1.5 right-1.5 rounded-full bg-[#6e8be8]/90 px-2 py-px font-mono text-[9px] font-medium uppercase tracking-wide text-white">
             clip
           </span>
         ) : null}
@@ -93,11 +92,11 @@ function ShotCard({
 
       <div className="flex min-h-0 flex-1 flex-col gap-1.5 p-2.5">
         <div className="flex items-baseline gap-2">
-          <span className="truncate text-xs font-semibold">{shot.id}</span>
+          <span className="truncate font-mono text-xs font-semibold">{shot.id}</span>
           <span className="min-w-0 truncate text-[11px] text-muted-foreground">
             {beat?.name ?? shot.beatId}
           </span>
-          <span className="ml-auto shrink-0 text-[11px] tabular-nums text-muted-foreground">
+          <span className="ml-auto shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
             {shot.durationSec.toFixed(1)}s
           </span>
         </div>
@@ -120,7 +119,7 @@ function ShotCard({
 
         {/* take stack */}
         {takes.length > 0 ? (
-          <div className="mt-auto flex flex-wrap items-center gap-1 border-t border-border/60 pt-1.5">
+          <div className="vdx-divider-t mt-auto flex flex-wrap items-center gap-1.5 pt-1.5">
             <span className="mr-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
               takes
             </span>
@@ -131,11 +130,8 @@ function ShotCard({
                 disabled={busy || take.selected}
                 title={take.prompt}
                 onClick={() => onSelectTake(take.id)}
-                className={`relative size-9 overflow-hidden rounded border text-[10px] transition-colors disabled:cursor-default ${
-                  take.selected
-                    ? "border-primary ring-2 ring-primary/50"
-                    : "border-border opacity-80 hover:opacity-100"
-                }`}
+                className="relative size-9 overflow-hidden rounded-[7px] font-mono text-[10px] opacity-80 transition-opacity hover:opacity-100 disabled:cursor-default disabled:opacity-100"
+                style={take.selected ? { boxShadow: "0 0 0 1.5px #d84c4c" } : undefined}
               >
                 {take.keyframeUrl ? (
                   <img
@@ -145,11 +141,11 @@ function ShotCard({
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <span className="flex h-full w-full items-center justify-center bg-muted text-muted-foreground">
+                  <span className="flex h-full w-full items-center justify-center bg-[var(--bm-raised)] text-muted-foreground">
                     {i + 1}
                   </span>
                 )}
-                <span className="absolute bottom-0 right-0 rounded-tl bg-black/70 px-0.5 text-[8px] leading-3 text-white">
+                <span className="absolute bottom-0 right-0 rounded-tl-[6px] bg-black/70 px-0.5 text-[8px] leading-3 text-white">
                   {i + 1}
                 </span>
               </button>
@@ -159,7 +155,7 @@ function ShotCard({
 
         {/* retake */}
         <form
-          className="flex gap-1.5 border-t border-border/60 pt-1.5"
+          className="vdx-divider-t flex gap-1.5 pt-1.5"
           onSubmit={(e) => {
             e.preventDefault();
             if (busy) return;
@@ -168,17 +164,13 @@ function ShotCard({
           }}
         >
           <input
-            className="h-7 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-[11px] outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="vdx-well h-7 min-w-0 flex-1 border-0 px-3 text-[11px] text-foreground outline-none placeholder:text-muted-foreground"
             placeholder="Optional tweak… (e.g. “wider shot”)"
             value={tweak}
             disabled={busy}
             onChange={(e) => setTweak(e.target.value)}
           />
-          <button
-            type="submit"
-            disabled={busy}
-            className="h-7 shrink-0 rounded-md border border-border bg-secondary px-2.5 text-[11px] font-medium text-secondary-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
-          >
+          <button type="submit" disabled={busy} className="vdx-pill-ghost h-7 shrink-0 px-2.5 text-[11px] font-medium">
             Retake
           </button>
         </form>

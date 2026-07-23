@@ -52,7 +52,8 @@ interface DragState {
 }
 
 const CARD_BASE =
-  "absolute select-none rounded-lg border bg-card text-card-foreground shadow-md transition-shadow hover:shadow-lg";
+  "absolute select-none overflow-hidden rounded-[12px] bg-[var(--bm-panel)] text-card-foreground transition-shadow";
+const CARD_SHADOW = "0 14px 34px -3px rgba(0,0,0,0.55), 0 4px 9px rgba(0,0,0,0.35)";
 
 function itemSize(item: CanvasItemView): { w: number; h: number } {
   const fallback = CANVAS_ITEM_SIZE[item.refType];
@@ -77,7 +78,7 @@ function CardBody({ item, onSelectShot }: { item: CanvasItemView; onSelectShot: 
               <KindIcon kind={p.kind} className="size-7 fill-current opacity-70" />
             </div>
           )}
-          <div className="flex items-center gap-1 border-t border-border/60 px-1.5 py-1">
+          <div className="vdx-divider-t flex items-center gap-1 px-1.5 py-1">
             <KindIcon kind={p.kind} className="size-3 shrink-0 fill-current text-muted-foreground" />
             <span className="truncate text-[10px]" title={p.name}>
               {p.name}
@@ -140,22 +141,16 @@ function CardBody({ item, onSelectShot }: { item: CanvasItemView; onSelectShot: 
             </div>
           )}
           {/* keyframe → clip lineage inside the card */}
-          <div className="flex w-full items-center gap-1 border-t border-border/60 px-1.5 py-1">
+          <div className="vdx-divider-t flex w-full items-center gap-1 px-1.5 py-1">
             <span className="truncate text-[10px] font-medium" title={p.label}>
               {p.label}
             </span>
-            <span className="ml-auto flex shrink-0 items-center gap-1 text-[9px] text-muted-foreground">
-              <span className={p.keyframeUrl ? "text-teal-300" : "opacity-40"}>key</span>
+            <span className="ml-auto flex shrink-0 items-center gap-1 font-mono text-[9px] text-muted-foreground">
+              <span className={p.keyframeUrl ? "text-[#5bbf97]" : "opacity-40"}>key</span>
               <svg viewBox="0 0 12 12" className="size-2.5 fill-none stroke-current opacity-50" aria-hidden>
                 <path strokeWidth="1.5" strokeLinecap="round" d="M2 6h7M7 3.5 9.5 6 7 8.5" />
               </svg>
-              <span
-                className={
-                  p.clipUrl
-                    ? "rounded-sm bg-indigo-500/25 px-1 text-indigo-300"
-                    : "px-1 opacity-40"
-                }
-              >
+              <span className={p.clipUrl ? "rounded-full bg-[#6e8be8]/20 px-1.5 text-[#6e8be8]" : "px-1 opacity-40"}>
                 clip
               </span>
             </span>
@@ -167,24 +162,27 @@ function CardBody({ item, onSelectShot }: { item: CanvasItemView; onSelectShot: 
       const p = item.payload as CanvasNotePayload;
       return (
         <div className="h-full overflow-hidden p-2">
-          <p className="whitespace-pre-wrap text-[11px] leading-snug text-amber-100/90">{p.text}</p>
+          <p className="whitespace-pre-wrap text-[11px] leading-snug text-[#e8c88a]">{p.text}</p>
         </div>
       );
     }
   }
 }
 
-function cardChrome(item: CanvasItemView): string {
+/** Per-type shadow (box-shadow only — Black Mamba has no border property). */
+function cardShadow(item: CanvasItemView): string {
   switch (item.refType) {
     case "entity":
-      return "border-violet-400/60 ring-1 ring-violet-400/20";
-    case "shot":
-      return "border-border";
+      return `0 0 0 1px rgba(192,132,252,0.35), ${CARD_SHADOW}`;
     case "note":
-      return "border-amber-500/40 bg-amber-500/10 shadow-amber-950/30";
+      return `0 0 0 1px rgba(201,137,47,0.3), ${CARD_SHADOW}`;
     default:
-      return "border-border";
+      return CARD_SHADOW;
   }
+}
+
+function cardBg(item: CanvasItemView): string | undefined {
+  return item.refType === "note" ? "#241b0f" : undefined;
 }
 
 export function CanvasBoard(props: CanvasBoardProps) {
@@ -418,8 +416,16 @@ export function CanvasBoard(props: CanvasBoardProps) {
           return (
             <div
               key={item.id}
-              className={`${CARD_BASE} ${cardChrome(item)} ${dragged ? "cursor-grabbing" : "cursor-grab"}`}
-              style={{ left: item.x, top: item.y, width: w, height: h, zIndex: item.z }}
+              className={`${CARD_BASE} ${dragged ? "cursor-grabbing" : "cursor-grab"}`}
+              style={{
+                left: item.x,
+                top: item.y,
+                width: w,
+                height: h,
+                zIndex: item.z,
+                boxShadow: cardShadow(item),
+                background: cardBg(item),
+              }}
               onPointerDown={(e) => onItemPointerDown(e, item)}
               onPointerMove={onItemPointerMove}
               onPointerUp={(e) => {
@@ -437,14 +443,19 @@ export function CanvasBoard(props: CanvasBoardProps) {
 
         {noteDraft ? (
           <div
-            className="absolute z-50 rounded-md border border-amber-500/60 bg-amber-500/15 p-1.5 shadow-lg"
-            style={{ left: noteDraft.x, top: noteDraft.y, width: CANVAS_ITEM_SIZE.note.w }}
+            className="absolute z-50 rounded-[10px] bg-[#241b0f] p-2"
+            style={{
+              left: noteDraft.x,
+              top: noteDraft.y,
+              width: CANVAS_ITEM_SIZE.note.w,
+              boxShadow: "0 0 0 1px rgba(201,137,47,0.4), 0 16px 40px -8px rgba(0,0,0,0.6)",
+            }}
             onPointerDown={(e) => e.stopPropagation()}
             onDoubleClick={(e) => e.stopPropagation()}
           >
             <input
               autoFocus
-              className="w-full bg-transparent text-[11px] text-amber-100 outline-none placeholder:text-amber-200/40"
+              className="w-full bg-transparent text-[11px] text-[#e8c88a] outline-none placeholder:text-[#c9892f]/40"
               placeholder="Note… (Enter to add)"
               value={noteDraft.text}
               onChange={(e) => setNoteDraft((d) => (d ? { ...d, text: e.target.value } : d))}
@@ -459,7 +470,7 @@ export function CanvasBoard(props: CanvasBoardProps) {
       </div>
 
       {/* HUD */}
-      <div className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-2 rounded-md border border-border bg-card/80 px-2 py-1 text-[10px] text-muted-foreground backdrop-blur">
+      <div className="vdx-chip pointer-events-none absolute bottom-3 right-3 gap-2 !bg-[var(--bm-raised)] px-2.5 py-1.5 font-mono text-[10px] normal-case backdrop-blur">
         <span className="tabular-nums">{Math.round(clamp(view.scale, 0.01, 99) * 100)}%</span>
         <span className="hidden sm:inline">drag: pan · ⌘/ctrl+scroll: zoom · double-click: note</span>
       </div>

@@ -11,12 +11,12 @@ interface StatusBarProps {
 /** Thin bar between preview and timeline: live job progress, else project info. */
 export function StatusBar({ jobStatus, project, durationSec, doneSummary }: StatusBarProps) {
   return (
-    <div className="flex h-7 shrink-0 items-center gap-2 border-y border-border bg-muted/60 px-3 text-xs">
+    <div className="vdx-divider-y flex h-7 shrink-0 items-center gap-2 bg-[var(--bm-well)] px-3 font-mono text-[11px]">
       {jobStatus ? (
         <>
           <span className="relative flex size-2 shrink-0">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-75" />
-            <span className="relative inline-flex size-2 rounded-full bg-indigo-500" />
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#6e8be8] opacity-75" />
+            <span className="relative inline-flex size-2 rounded-full bg-[#6e8be8]" />
           </span>
           <span className="truncate text-foreground/80" title={jobStatus}>
             {jobStatus}
@@ -24,7 +24,7 @@ export function StatusBar({ jobStatus, project, durationSec, doneSummary }: Stat
         </>
       ) : project ? (
         <>
-          <span className="size-2 shrink-0 rounded-full bg-emerald-500" />
+          <span className="size-2 shrink-0 rounded-full bg-[#5bbf97]" />
           <span className="truncate text-muted-foreground">
             {project.metadata.name} · {durationSec.toFixed(1)}s · {project.scenes.length}{" "}
             {project.scenes.length === 1 ? "scene" : "scenes"} · {project.mediaAssets.length} assets
@@ -35,7 +35,7 @@ export function StatusBar({ jobStatus, project, durationSec, doneSummary }: Stat
       )}
       {doneSummary ? (
         <span
-          className="ml-auto min-w-0 max-w-[45%] shrink-0 truncate rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-px text-[10px] text-emerald-300"
+          className="vdx-chip ml-auto min-w-0 max-w-[45%] shrink-0 truncate !bg-[#5bbf97]/12 !text-[#5bbf97]"
           title={doneSummary}
         >
           {doneSummary}
