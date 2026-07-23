@@ -393,6 +393,38 @@ export interface EditResponse {
   applied: string[];
 }
 
+// --- settings ----------------------------------------------------------------
+
+export type ModelEffort = "low" | "medium" | "high" | "xhigh" | "max";
+
+/** GET /api/settings response. */
+export interface SettingsResponse {
+  anthropicKeySet: boolean;
+  anthropicKeyPreview: string | null;
+  falKeySet: boolean;
+  falKeyPreview: string | null;
+  elevenLabsKeySet: boolean;
+  elevenLabsKeyPreview: string | null;
+  plannerModel: string;
+  plannerEffort: ModelEffort;
+  editorModel: string;
+  editorEffort: ModelEffort;
+}
+
+/**
+ * PUT /api/settings request body. All fields optional; an omitted field is
+ * left unchanged server-side, an empty string clears that API key.
+ */
+export interface UpdateSettingsRequest {
+  anthropicApiKey?: string;
+  falApiKey?: string;
+  elevenLabsApiKey?: string;
+  plannerModel?: string;
+  plannerEffort?: ModelEffort;
+  editorModel?: string;
+  editorEffort?: ModelEffort;
+}
+
 // ---------------------------------------------------------------------------
 // Chat model (UI-local)
 // ---------------------------------------------------------------------------

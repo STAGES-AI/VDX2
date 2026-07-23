@@ -33,8 +33,9 @@ import { basename, join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { applyTake, createLibraryBank, retakeShot, runDirector } from "@vdx/agent";
+import { applyTake, createLibraryBank, createPlanner, retakeShot, runDirector } from "@vdx/agent";
 import { commandCatalog } from "@vdx/timeline";
+import { effectiveEnv } from "./config";
 import { projectDigest } from "./digest";
 import type { Services } from "./services";
 import { createServices } from "./services";
@@ -53,6 +54,8 @@ const ENTITY_TYPES = [
   "brief",
   "other",
 ] as const;
+
+const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"] as const;
 
 type ToolResult = {
   content: Array<{ type: "text"; text: string }>;
@@ -86,7 +89,12 @@ function errorResult(err: unknown): ToolResult {
 export function buildMcpServer(services: Services): McpServer {
   const server = new McpServer({ name: "vdx-editor", version: "0.1.0" });
   const registerTool = server.registerTool.bind(server) as unknown as RegisterTool;
-  const { manager, gateway, renderer, library } = services;
+  // `gateway` is NOT destructured here — this MCP server is long-lived and
+  // shares `services` with the HTTP app, so a settings update (PUT
+  // /api/settings) can rebuild the Gateway at any time. Tools that generate
+  // media must call services.getGateway() fresh at the point of use (see
+  // services.ts's module docs for the full rationale).
+  const { manager, renderer, library } = services;
 
   // -- one tool per timeline command ---------------------------------------
   for (const command of commandCatalog) {
@@ -166,11 +174,18 @@ export function buildMcpServer(services: Services): McpServer {
       try {
         const { id, store } = manager.create();
         const bank = createLibraryBank(library, id);
+        const config = services.getConfig();
+        const planner = createPlanner({
+          model: config.plannerModel,
+          effort: config.plannerEffort,
+          apiKey: effectiveEnv(config).ANTHROPIC_API_KEY,
+        });
         const outcome = await runDirector({
           brief,
           ...(targetDurationSec !== undefined ? { targetDurationSec } : {}),
           store,
-          gateway,
+          gateway: services.getGateway(),
+          planner,
           bank,
           context: library.getProjectContext(id),
           library,
@@ -472,7 +487,7 @@ export function buildMcpServer(services: Services): McpServer {
         }
         const outcome = await retakeShot({
           store,
-          gateway,
+          gateway: services.getGateway(),
           plan,
           shotId,
           ...(promptTweak !== undefined ? { promptTweak } : {}),
@@ -522,6 +537,105 @@ export function buildMcpServer(services: Services): McpServer {
           meta: { text: noteText },
         });
         return text(`Added note ${item.id} at (${item.x}, ${item.y}).`);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  // -- project lifecycle (rename/duplicate/delete) + settings ---------------
+
+  registerTool(
+    "rename_project",
+    {
+      description: "Rename a project.",
+      inputSchema: { projectId: zProjectId, name: z.string().min(1) },
+    },
+    async ({ projectId, name }: { projectId: string; name: string }) => {
+      try {
+        manager.rename(projectId, name);
+        return text(`Renamed ${projectId} to "${name}".`);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  registerTool(
+    "duplicate_project",
+    {
+      description:
+        "Duplicate a project: deep-clones its current timeline (and plan, if any) under a " +
+        "fresh id, named \"<original> (copy)\". Library-scoped canvas/take history is not copied.",
+      inputSchema: { projectId: zProjectId },
+    },
+    async ({ projectId }: { projectId: string }) => {
+      try {
+        const { newId } = manager.duplicate(projectId);
+        return text(`Duplicated ${projectId} → ${newId}`);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  registerTool(
+    "delete_project",
+    {
+      description:
+        "Permanently delete a project's timeline/plan files and detach it from the library " +
+        "(canvas items, takes, asset links). The underlying media assets are not deleted.",
+      inputSchema: { projectId: zProjectId },
+    },
+    async ({ projectId }: { projectId: string }) => {
+      try {
+        manager.delete(projectId);
+        services.detachProject(projectId);
+        return text(`Deleted ${projectId}.`);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  registerTool(
+    "get_settings",
+    {
+      description:
+        "Read current server settings: which API keys are configured (masked previews only, " +
+        "never the raw key) and the planner/editor model + effort.",
+    },
+    async () => text(JSON.stringify(services.getSettingsView(), null, 2)),
+  );
+
+  registerTool(
+    "update_settings",
+    {
+      description:
+        "Update server settings: API keys (empty string clears a key) and/or planner/editor " +
+        "model + effort. Takes effect immediately, no server restart required.",
+      inputSchema: {
+        anthropicApiKey: z.string().optional().describe("Empty string clears it"),
+        falApiKey: z.string().optional().describe("Empty string clears it"),
+        elevenLabsApiKey: z.string().optional().describe("Empty string clears it"),
+        plannerModel: z.string().min(1).optional(),
+        plannerEffort: z.enum(EFFORT_LEVELS).optional(),
+        editorModel: z.string().min(1).optional(),
+        editorEffort: z.enum(EFFORT_LEVELS).optional(),
+      },
+    },
+    async (patch: {
+      anthropicApiKey?: string;
+      falApiKey?: string;
+      elevenLabsApiKey?: string;
+      plannerModel?: string;
+      plannerEffort?: (typeof EFFORT_LEVELS)[number];
+      editorModel?: string;
+      editorEffort?: (typeof EFFORT_LEVELS)[number];
+    }) => {
+      try {
+        const view = services.updateSettings(patch);
+        return text(JSON.stringify(view, null, 2));
       } catch (err) {
         return errorResult(err);
       }

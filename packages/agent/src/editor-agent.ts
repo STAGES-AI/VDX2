@@ -15,6 +15,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { AudioTrack, ProjectStore, TimelineTrack, TScene, VideoElement } from "@vdx/timeline";
 import { commandCatalog, mt } from "@vdx/timeline";
 import { zodToJsonSchema } from "./json-schema";
+import type { Effort } from "./types";
 
 const EDITOR_MODEL = "claude-opus-4-8";
 const MAX_ITERATIONS = 8;
@@ -193,12 +194,20 @@ async function applyWithClaude(
   store: ProjectStore,
   instruction: string,
   model: string,
+  effort: Effort | undefined,
+  apiKey: string | undefined,
 ): Promise<EditResult> {
-  const client = new Anthropic();
+  const client = new Anthropic({ apiKey: apiKey ?? process.env.ANTHROPIC_API_KEY });
   const tools = buildTools();
   const applied: string[] = [];
   const messages: unknown[] = [{ role: "user", content: instruction }];
   let reply = "";
+
+  // Same defensive gating as claude-planner.ts: the installed SDK does not
+  // declare `effort` in its request types and there is no live key here to
+  // confirm the API accepts it, so it is only sent when explicitly
+  // configured away from the "high" default.
+  const effortField = effort && effort !== "high" ? { output_config: { effort } } : {};
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
     const response = (await (client.messages.create as (params: unknown) => Promise<unknown>)({
@@ -208,6 +217,7 @@ async function applyWithClaude(
       system: SYSTEM_PROMPT,
       messages,
       tools,
+      ...effortField,
     })) as { content: Array<Record<string, unknown>>; stop_reason?: string };
 
     const text = response.content
@@ -258,10 +268,11 @@ async function applyWithClaude(
 export async function applyEditInstruction(
   store: ProjectStore,
   instruction: string,
-  opts?: { model?: string },
+  opts?: { model?: string; effort?: Effort; apiKey?: string },
 ): Promise<EditResult> {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  const apiKey = opts?.apiKey ?? process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
     return applyMockInstruction(store, instruction);
   }
-  return applyWithClaude(store, instruction, opts?.model ?? EDITOR_MODEL);
+  return applyWithClaude(store, instruction, opts?.model ?? EDITOR_MODEL, opts?.effort, apiKey);
 }

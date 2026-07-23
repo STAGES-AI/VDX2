@@ -14,7 +14,9 @@ import type {
   LibraryResponse,
   ProjectListItem,
   ProjectResponse,
+  SettingsResponse,
   TakesResponse,
+  UpdateSettingsRequest,
   UploadResponse,
 } from "./types";
 
@@ -146,6 +148,29 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ draft }),
     });
+  },
+
+  getSettings(): Promise<SettingsResponse> {
+    return http("/api/settings");
+  },
+
+  updateSettings(patch: UpdateSettingsRequest): Promise<SettingsResponse> {
+    return http("/api/settings", { method: "PUT", body: JSON.stringify(patch) });
+  },
+
+  renameProject(id: string, name: string): Promise<{ summary: string }> {
+    return http(`/api/projects/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name }),
+    });
+  },
+
+  duplicateProject(id: string): Promise<{ projectId: string }> {
+    return http(`/api/projects/${encodeURIComponent(id)}/duplicate`, { method: "POST" });
+  },
+
+  deleteProject(id: string): Promise<{ ok: true }> {
+    return http(`/api/projects/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
 };
 

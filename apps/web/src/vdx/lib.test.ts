@@ -4,6 +4,7 @@ import {
   CANVAS_MAX_SCALE,
   CANVAS_MIN_SCALE,
   TICKS_PER_SECOND,
+  buildSettingsPatch,
   buildTimelineRows,
   clamp,
   fmtBytes,
@@ -21,9 +22,10 @@ import {
   worldToScreen,
   zoomAt,
 } from "./lib";
-import type { CanvasView, ShotItemLike, TakeLike } from "./lib";
+import type { CanvasView, SettingsFormEdits, ShotItemLike, TakeLike } from "./lib";
 import type {
   AudioTrack,
+  SettingsResponse,
   TProject,
   TScene,
   TextElement,
@@ -382,5 +384,82 @@ describe("shotChainSegments", () => {
   test("fewer than two cards yields no segments", () => {
     expect(shotChainSegments([], ["shot-1"])).toEqual([]);
     expect(shotChainSegments([item("c1", "shot-1", 0, 0)], ["shot-1"])).toEqual([]);
+  });
+});
+
+describe("buildSettingsPatch", () => {
+  const loaded: SettingsResponse = {
+    anthropicKeySet: true,
+    anthropicKeyPreview: "sk-ant-...abcd",
+    falKeySet: false,
+    falKeyPreview: null,
+    elevenLabsKeySet: true,
+    elevenLabsKeyPreview: "el-...9f2a",
+    plannerModel: "claude-sonnet-5",
+    plannerEffort: "medium",
+    editorModel: "claude-haiku-4-5",
+    editorEffort: "low",
+  };
+
+  const noEdits: SettingsFormEdits = {
+    anthropicApiKey: "",
+    anthropicCleared: false,
+    falApiKey: "",
+    falCleared: false,
+    elevenLabsApiKey: "",
+    elevenLabsCleared: false,
+    plannerModel: loaded.plannerModel,
+    plannerEffort: loaded.plannerEffort,
+    editorModel: loaded.editorModel,
+    editorEffort: loaded.editorEffort,
+  };
+
+  test("no changes yields an empty patch", () => {
+    expect(buildSettingsPatch(loaded, noEdits)).toEqual({});
+  });
+
+  test("typing a new key includes only that field, trimmed", () => {
+    const patch = buildSettingsPatch(loaded, { ...noEdits, anthropicApiKey: "  sk-ant-new123  " });
+    expect(patch).toEqual({ anthropicApiKey: "sk-ant-new123" });
+  });
+
+  test("an untouched-but-blank key field is omitted, not sent as an empty string", () => {
+    const patch = buildSettingsPatch(loaded, noEdits);
+    expect(patch.anthropicApiKey).toBeUndefined();
+    expect(patch.falApiKey).toBeUndefined();
+    expect(patch.elevenLabsApiKey).toBeUndefined();
+  });
+
+  test("an explicit clear sends an empty string even though the field is blank", () => {
+    const patch = buildSettingsPatch(loaded, { ...noEdits, anthropicCleared: true });
+    expect(patch).toEqual({ anthropicApiKey: "" });
+  });
+
+  test("typing after a clear wins over the clear flag", () => {
+    const patch = buildSettingsPatch(loaded, {
+      ...noEdits,
+      anthropicApiKey: "sk-ant-fresh",
+      anthropicCleared: true,
+    });
+    expect(patch).toEqual({ anthropicApiKey: "sk-ant-fresh" });
+  });
+
+  test("changed selects are included, unchanged ones are not", () => {
+    const patch = buildSettingsPatch(loaded, {
+      ...noEdits,
+      plannerModel: "claude-opus-4-8",
+      editorEffort: "xhigh",
+    });
+    expect(patch).toEqual({ plannerModel: "claude-opus-4-8", editorEffort: "xhigh" });
+  });
+
+  test("multiple key and select changes combine into one patch", () => {
+    const patch = buildSettingsPatch(loaded, {
+      ...noEdits,
+      falApiKey: "fal-key-1",
+      elevenLabsCleared: true,
+      plannerEffort: "max",
+    });
+    expect(patch).toEqual({ falApiKey: "fal-key-1", elevenLabsApiKey: "", plannerEffort: "max" });
   });
 });

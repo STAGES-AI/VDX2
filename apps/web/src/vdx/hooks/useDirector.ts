@@ -20,8 +20,10 @@ import type {
   Plan,
   ProjectListItem,
   RenderInfo,
+  SettingsResponse,
   TakeInfo,
   TProject,
+  UpdateSettingsRequest,
 } from "../types";
 
 const REFRESH_THROTTLE_MS = 1200;
@@ -77,6 +79,20 @@ export interface DirectorApi {
   render: (draft: boolean) => void;
   loadProject: (id: string) => void;
   refreshProjectList: () => void;
+  /** Create a fresh draft project and make it active — the "+ New Project" action. */
+  newProject: () => void;
+  renameProject: (id: string, name: string) => Promise<boolean>;
+  /** Resolves the new project's id (or null on failure); also loads it. */
+  duplicateProject: (id: string) => Promise<string | null>;
+  /** Clears the active project view if the deleted project was open. */
+  deleteProject: (id: string) => Promise<boolean>;
+  settings: SettingsResponse | null;
+  settingsLoading: boolean;
+  settingsSaving: boolean;
+  settingsError: string | null;
+  loadSettings: () => void;
+  /** Resolves true on success (settings state is updated); false on failure (settingsError is set). */
+  saveSettings: (patch: UpdateSettingsRequest) => Promise<boolean>;
 }
 
 export function useDirector(): DirectorApi {
@@ -95,6 +111,10 @@ export function useDirector(): DirectorApi {
   const [jobStatus, setJobStatus] = useState<string | null>(null);
   const [awaitingApprovalJobId, setAwaitingApprovalJobId] = useState<string | null>(null);
   const [doneSummary, setDoneSummary] = useState<string | null>(null);
+  const [settings, setSettings] = useState<SettingsResponse | null>(null);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
 
   const projectIdRef = useRef<string | null>(null);
   const planRef = useRef<Plan | null>(null);
@@ -117,6 +137,33 @@ export function useDirector(): DirectorApi {
         /* server offline; the next action will surface a real error */
       });
   }, []);
+
+  /** Reset every per-project panel to empty — shared by loadProject (before
+   *  fetching the next project), newProject, and deleteProject (when the
+   *  deleted project was the active one). Callers own projectId/projectIdRef. */
+  const clearActiveProjectState = useCallback(() => {
+    setProject(null);
+    setPlan(null);
+    setRenders([]);
+    setRenderOverrideUrl(null);
+    setLibrary(null);
+    setCanvasItems([]);
+    setTakes([]);
+    setAwaitingApprovalJobId(null);
+    setDoneSummary(null);
+  }, []);
+
+  /** Empty draft project, made active — shared by the first pre-brief upload
+   *  and the "+ New Project" action. */
+  const createDraftAndActivate = useCallback(async (): Promise<string> => {
+    const res = await api.createDraftProject();
+    const pid = res.projectId;
+    projectIdRef.current = pid;
+    setProjectId(pid);
+    push({ kind: "status", stage: "info", text: `Draft project ${pid} created` });
+    refreshProjectList();
+    return pid;
+  }, [push, refreshProjectList]);
 
   /** Library + canvas + takes for the current project; failures are silent. */
   const refreshPanels = useCallback(async () => {
@@ -277,12 +324,7 @@ export function useDirector(): DirectorApi {
         try {
           let pid = projectIdRef.current;
           if (!pid) {
-            const res = await api.createDraftProject();
-            pid = res.projectId;
-            projectIdRef.current = pid;
-            setProjectId(pid);
-            push({ kind: "status", stage: "info", text: `Draft project ${pid} created` });
-            refreshProjectList();
+            pid = await createDraftAndActivate();
           }
           push({
             kind: "status",
@@ -302,7 +344,7 @@ export function useDirector(): DirectorApi {
         }
       })();
     },
-    [push, refreshPanels, refreshProjectList, uploading],
+    [createDraftAndActivate, push, refreshPanels, uploading],
   );
 
   const retake = useCallback(
@@ -416,15 +458,7 @@ export function useDirector(): DirectorApi {
       stopStreamRef.current = null;
       projectIdRef.current = id;
       setProjectId(id);
-      setProject(null);
-      setPlan(null);
-      setRenders([]);
-      setRenderOverrideUrl(null);
-      setLibrary(null);
-      setCanvasItems([]);
-      setTakes([]);
-      setAwaitingApprovalJobId(null);
-      setDoneSummary(null);
+      clearActiveProjectState();
       api
         .getProject(id)
         .then((res) => {
@@ -439,8 +473,94 @@ export function useDirector(): DirectorApi {
         });
       void refreshPanels();
     },
-    [busy, push, refreshPanels],
+    [busy, clearActiveProjectState, push, refreshPanels],
   );
+
+  const newProject = useCallback(() => {
+    if (busy) return;
+    stopStreamRef.current?.();
+    stopStreamRef.current = null;
+    clearActiveProjectState();
+    void createDraftAndActivate().catch((err: unknown) => {
+      push({ kind: "error", text: err instanceof Error ? err.message : String(err) });
+    });
+  }, [busy, clearActiveProjectState, createDraftAndActivate, push]);
+
+  const renameProject = useCallback(
+    async (id: string, name: string): Promise<boolean> => {
+      try {
+        await api.renameProject(id, name);
+        refreshProjectList();
+        return true;
+      } catch (err) {
+        push({ kind: "error", text: err instanceof Error ? err.message : String(err) });
+        return false;
+      }
+    },
+    [push, refreshProjectList],
+  );
+
+  const duplicateProject = useCallback(
+    async (id: string): Promise<string | null> => {
+      try {
+        const { projectId: newId } = await api.duplicateProject(id);
+        refreshProjectList();
+        loadProject(newId);
+        return newId;
+      } catch (err) {
+        push({ kind: "error", text: err instanceof Error ? err.message : String(err) });
+        return null;
+      }
+    },
+    [loadProject, push, refreshProjectList],
+  );
+
+  const deleteProject = useCallback(
+    async (id: string): Promise<boolean> => {
+      try {
+        await api.deleteProject(id);
+        refreshProjectList();
+        if (projectIdRef.current === id) {
+          stopStreamRef.current?.();
+          stopStreamRef.current = null;
+          projectIdRef.current = null;
+          setProjectId(null);
+          clearActiveProjectState();
+        }
+        return true;
+      } catch (err) {
+        push({ kind: "error", text: err instanceof Error ? err.message : String(err) });
+        return false;
+      }
+    },
+    [clearActiveProjectState, push, refreshProjectList],
+  );
+
+  const loadSettings = useCallback(() => {
+    setSettingsLoading(true);
+    setSettingsError(null);
+    api
+      .getSettings()
+      .then((res) => setSettings(res))
+      .catch((err: unknown) => setSettingsError(err instanceof Error ? err.message : String(err)))
+      .finally(() => setSettingsLoading(false));
+  }, []);
+
+  const saveSettings = useCallback(async (patch: UpdateSettingsRequest): Promise<boolean> => {
+    if (Object.keys(patch).length === 0) return true;
+    setSettingsSaving(true);
+    setSettingsError(null);
+    try {
+      const res = await api.updateSettings(patch);
+      setSettings(res);
+      return true;
+    } catch (err) {
+      setSettingsError(err instanceof Error ? err.message : String(err));
+      return false;
+    } finally {
+      setSettingsSaving(false);
+    }
+  }, []);
 
   useEffect(() => {
     refreshProjectList();
@@ -482,5 +602,15 @@ export function useDirector(): DirectorApi {
     render,
     loadProject,
     refreshProjectList,
+    newProject,
+    renameProject,
+    duplicateProject,
+    deleteProject,
+    settings,
+    settingsLoading,
+    settingsSaving,
+    settingsError,
+    loadSettings,
+    saveSettings,
   };
 }

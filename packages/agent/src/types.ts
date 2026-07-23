@@ -80,6 +80,9 @@ export interface Planner {
   plan(brief: string, opts: { targetDurationSec: number; context?: ProjectContext }): Promise<Plan>;
 }
 
+/** Reasoning effort for a Claude call — settings-configurable, per-caller. */
+export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
+
 export type DirectorEvent =
   | { stage: "planning"; message: string }
   | { stage: "plan_ready"; plan: Plan }

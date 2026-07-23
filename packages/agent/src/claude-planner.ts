@@ -15,10 +15,21 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { ProjectContext } from "@vdx/library";
 import { zodToJsonSchema } from "./json-schema";
 import { MockPlanner } from "./mock-planner";
-import type { Plan, Planner } from "./types";
+import type { Effort, Plan, Planner } from "./types";
 import { zPlan } from "./types";
 
 const PLANNER_MODEL = "claude-opus-4-8";
+
+export interface ClaudePlannerOptions {
+  /** Claude model id; falls back to PLANNER_MODEL when omitted. */
+  model?: string;
+  /** Reasoning effort. Not sent unless provided (see plan() for why). */
+  effort?: Effort;
+  /** Explicit API key; falls back to process.env.ANTHROPIC_API_KEY. Lets
+   *  createPlanner()/the server thread a Settings-configured key through
+   *  without ever needing a process restart. */
+  apiKey?: string;
+}
 
 /** Researched craft rules for one-shot AI video generation, verbatim-ish. */
 const SYSTEM_PROMPT = `You are a film director planning a short AI-generated video from a brief.
@@ -86,19 +97,24 @@ async function loadZodOutputFormat(): Promise<ZodOutputFormat | undefined> {
 export class ClaudePlanner implements Planner {
   readonly mode = "claude" as const;
   private readonly model: string;
+  private readonly effort?: Effort;
+  private readonly apiKey?: string;
 
-  constructor(model: string = PLANNER_MODEL) {
-    this.model = model;
+  constructor(opts: ClaudePlannerOptions = {}) {
+    this.model = opts.model ?? PLANNER_MODEL;
+    this.effort = opts.effort;
+    this.apiKey = opts.apiKey;
   }
 
   async plan(
     brief: string,
     opts: { targetDurationSec: number; context?: ProjectContext },
   ): Promise<Plan> {
-    if (!process.env.ANTHROPIC_API_KEY) {
+    const apiKey = this.apiKey ?? process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
       throw new Error("ClaudePlanner requires ANTHROPIC_API_KEY — use createPlanner() to fall back to MockPlanner");
     }
-    const client = new Anthropic();
+    const client = new Anthropic({ apiKey });
     const system = opts.context
       ? `${SYSTEM_PROMPT}\n\n${renderContext(opts.context)}`
       : SYSTEM_PROMPT;
@@ -109,6 +125,14 @@ export class ClaudePlanner implements Planner {
     const zodOutputFormat = await loadZodOutputFormat();
     const messages = client.messages as unknown as Record<string, unknown>;
 
+    // The installed SDK (as of this build) does not declare `effort` in its
+    // request types, and there is no live API key in this environment to
+    // confirm the field is accepted server-side — see claude-planner's
+    // module docs / the build report for details. It is only added when a
+    // non-default effort is explicitly configured, so the common case (no
+    // Settings override) sends exactly the request this file always sent.
+    const effortField = this.effort && this.effort !== "high" ? { effort: this.effort } : {};
+
     if (zodOutputFormat && typeof messages.parse === "function") {
       // Structured output via messages.parse + zodOutputFormat(zPlan).
       const response = (await (messages.parse as (params: unknown) => Promise<unknown>)({
@@ -117,7 +141,7 @@ export class ClaudePlanner implements Planner {
         thinking: { type: "adaptive" },
         system,
         messages: [{ role: "user", content: userMessage }],
-        output_config: { format: zodOutputFormat(zPlan) },
+        output_config: { format: zodOutputFormat(zPlan), ...effortField },
       })) as { parsed_output?: unknown; stop_reason?: string };
       if (!response.parsed_output) {
         throw new Error(
@@ -143,6 +167,7 @@ export class ClaudePlanner implements Planner {
         },
       ],
       tool_choice: { type: "tool", name: "emit_plan" },
+      ...(Object.keys(effortField).length > 0 ? { output_config: effortField } : {}),
     })) as { content: Array<{ type: string; input?: unknown }>; stop_reason?: string };
 
     const toolUse = response.content.find((block) => block.type === "tool_use");
@@ -153,7 +178,13 @@ export class ClaudePlanner implements Planner {
   }
 }
 
-/** ClaudePlanner when ANTHROPIC_API_KEY is set, MockPlanner otherwise. */
-export function createPlanner(): Planner {
-  return process.env.ANTHROPIC_API_KEY ? new ClaudePlanner() : new MockPlanner();
+/**
+ * ClaudePlanner when an API key is available (opts.apiKey or
+ * process.env.ANTHROPIC_API_KEY), MockPlanner otherwise. opts is entirely
+ * optional and backward compatible: createPlanner() with no arguments keeps
+ * today's behavior exactly.
+ */
+export function createPlanner(opts: ClaudePlannerOptions = {}): Planner {
+  const apiKey = opts.apiKey ?? process.env.ANTHROPIC_API_KEY;
+  return apiKey ? new ClaudePlanner(opts) : new MockPlanner();
 }

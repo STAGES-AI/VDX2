@@ -22,10 +22,11 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import type { Plan } from "@vdx/agent";
 import { zPlan } from "@vdx/agent";
+import type { TProject } from "@vdx/timeline";
 import { ProjectStore } from "@vdx/timeline";
 
 export interface ProjectListItem {
@@ -144,6 +145,54 @@ export class ProjectsManager {
       }
     }
     return items.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }
+
+  /** Rename a project (updates project.metadata.name, autosaves). */
+  rename(id: string, name: string): void {
+    const store = this.get(id);
+    store.dispatch({ type: "update_project_settings", params: { name } });
+    this.save(id, store);
+  }
+
+  /**
+   * Duplicate a project: deep-clone its current state (and plan, if any)
+   * under a fresh id. The file id and project.metadata.id both get FRESH,
+   * independent uuids (matching how create() mints them separately).
+   * canvas_items/takes/project_assets are library-scoped rows keyed to the
+   * OLD project id — intentionally not copied, since duplicating them would
+   * either dangle or require rewriting foreign keys; the duplicate simply
+   * starts with an empty library-side canvas/take history.
+   */
+  duplicate(id: string): { newId: string } {
+    const source = this.get(id);
+    const original = source.getProject();
+    const cloned: TProject = structuredClone(original);
+    cloned.metadata.id = randomUUID();
+    cloned.metadata.name = `${original.metadata.name} (copy)`;
+    cloned.metadata.updatedAt = new Date().toISOString();
+
+    const newId = randomUUID();
+    const newStore = new ProjectStore(cloned);
+    this.attach(newId, newStore);
+    this.save(newId, newStore);
+
+    const plan = this.getPlan(id);
+    if (plan) this.savePlan(newId, structuredClone(plan));
+
+    return { newId };
+  }
+
+  /**
+   * Delete a project's own files (projects/<id>.json, plans/<id>.json).
+   * Does NOT touch library state — callers that also want the library
+   * detached (canvas/takes/project_assets rows) call
+   * services.detachProject(id) separately.
+   */
+  delete(id: string): void {
+    this.validateId(id);
+    this.stores.delete(id);
+    rmSync(this.projectPath(id), { force: true });
+    rmSync(join(this.plansDir, `${id}.json`), { force: true });
   }
 
   // -- plans ----------------------------------------------------------------

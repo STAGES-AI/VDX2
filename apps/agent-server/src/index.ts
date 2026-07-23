@@ -19,9 +19,19 @@
  *   POST /api/projects/:id/takes/:takeId/select → {summary}
  *   POST /api/projects/:id/shots/:shotId/retake {promptTweak?} → {jobId}
  *   POST /api/projects/:id/edit|undo|redo|render  (unchanged)
+ *   PATCH /api/projects/:id                 {name} → {summary} (rename)
+ *   POST /api/projects/:id/duplicate        → {projectId} (deep-cloned copy)
+ *   DELETE /api/projects/:id                → {ok: true}
+ *   GET  /api/settings                      → SettingsView (masked keys)
+ *   PUT  /api/settings                      partial RuntimeConfig patch → SettingsView
  *   GET  /media/*                         static files from the .vdx state dir
  *
  * All asset urls are '/media/...' paths: '/media/' + relative(root, storagePath).
+ *
+ * Settings (API keys + planner/editor model+effort) are hot: PUT /api/settings
+ * rebuilds the Gateway and swaps the RuntimeConfig services.ts holds, with no
+ * server restart. See services.ts's module docs for why every consumer of
+ * the Gateway must call services.getGateway() fresh rather than caching it.
  */
 
 import { existsSync } from "node:fs";
@@ -30,9 +40,17 @@ import { join, resolve, sep } from "node:path";
 import { cors } from "@elysiajs/cors";
 import { Elysia } from "elysia";
 import { z } from "zod";
-import { applyEditInstruction, applyTake, createLibraryBank, retakeShot, runDirector } from "@vdx/agent";
+import {
+  applyEditInstruction,
+  applyTake,
+  createLibraryBank,
+  createPlanner,
+  retakeShot,
+  runDirector,
+} from "@vdx/agent";
 import type { Plan } from "@vdx/agent";
 import type { CanvasItem } from "@vdx/library";
+import { effectiveEnv } from "./config";
 import type { Job } from "./jobs";
 import type { Services } from "./services";
 import { createServices } from "./services";
@@ -84,6 +102,22 @@ const zRetakeBody = z
   .optional()
   .nullable();
 
+const zRenameBody = z.object({
+  name: z.string().min(1, "name must be a non-empty string"),
+});
+
+const zEffort = z.enum(["low", "medium", "high", "xhigh", "max"]);
+
+const zSettingsBody = z.object({
+  anthropicApiKey: z.string().optional(),
+  falApiKey: z.string().optional(),
+  elevenLabsApiKey: z.string().optional(),
+  plannerModel: z.string().min(1).optional(),
+  plannerEffort: zEffort.optional(),
+  editorModel: z.string().min(1).optional(),
+  editorEffort: zEffort.optional(),
+});
+
 const CONTENT_TYPES: Record<string, string> = {
   ".mp4": "video/mp4",
   ".webm": "video/webm",
@@ -132,7 +166,14 @@ export type AppContext = ReturnType<typeof createApp>;
 
 export function createApp(options: { root?: string } = {}) {
   const services = createServices(options.root !== undefined ? { root: options.root } : {});
-  const { manager, jobs, gateway, renderer, library } = services;
+  // NOTE: `gateway` is intentionally NOT destructured here. Destructuring it
+  // once at boot would capture a closure over the Gateway instance that
+  // exists at that moment; updateSettings() (PUT /api/settings) rebuilds the
+  // Gateway on every config change, so anything holding the old reference
+  // would silently keep using stale API keys until a restart. Call
+  // services.getGateway() fresh at the point of use instead — see
+  // services.ts's module docs.
+  const { manager, jobs, renderer, library } = services;
 
   function startDirectorJob(
     projectId: string,
@@ -144,13 +185,20 @@ export function createApp(options: { root?: string } = {}) {
     const bank = createLibraryBank(library, projectId);
     void (async () => {
       try {
+        const config = services.getConfig();
+        const planner = createPlanner({
+          model: config.plannerModel,
+          effort: config.plannerEffort,
+          apiKey: effectiveEnv(config).ANTHROPIC_API_KEY,
+        });
         const outcome = await runDirector({
           brief,
           ...(opts.targetDurationSec !== undefined
             ? { targetDurationSec: opts.targetDurationSec }
             : {}),
           store,
-          gateway,
+          gateway: services.getGateway(),
+          planner,
           bank,
           context: library.getProjectContext(projectId),
           library,
@@ -183,7 +231,7 @@ export function createApp(options: { root?: string } = {}) {
       try {
         const outcome = await retakeShot({
           store,
-          gateway,
+          gateway: services.getGateway(),
           plan,
           shotId,
           ...(promptTweak !== undefined ? { promptTweak } : {}),
@@ -331,6 +379,17 @@ export function createApp(options: { root?: string } = {}) {
   const app = new Elysia()
     .use(cors({ origin: true }))
     .get("/", () => ({ ok: true, service: "vdx-agent-server", port: PORT }))
+
+    .get("/api/settings", () => services.getSettingsView())
+
+    .put("/api/settings", ({ body, set }) => {
+      const parsed = zSettingsBody.safeParse(body ?? {});
+      if (!parsed.success) {
+        set.status = 400;
+        return `Invalid body: ${parsed.error.issues.map((i) => i.message).join("; ")}`;
+      }
+      return services.updateSettings(parsed.data);
+    })
 
     .post("/api/uploads", async ({ body, set }) => {
       if (typeof body !== "object" || body === null) {
@@ -483,6 +542,54 @@ export function createApp(options: { root?: string } = {}) {
           plan: manager.getPlan(params.id),
           renders: manager.listRenders(params.id),
         };
+      } catch (err) {
+        set.status = 500;
+        return errorMessage(err);
+      }
+    })
+
+    .patch("/api/projects/:id", ({ params, body, set }) => {
+      const parsed = zRenameBody.safeParse(body);
+      if (!parsed.success) {
+        set.status = 400;
+        return `Invalid body: ${parsed.error.issues.map((i) => i.message).join("; ")}`;
+      }
+      if (!manager.has(params.id)) {
+        set.status = 404;
+        return `Project not found: ${params.id}`;
+      }
+      try {
+        manager.rename(params.id, parsed.data.name);
+        return { summary: `Renamed to "${parsed.data.name}"` };
+      } catch (err) {
+        set.status = 500;
+        return errorMessage(err);
+      }
+    })
+
+    .post("/api/projects/:id/duplicate", ({ params, set }) => {
+      if (!manager.has(params.id)) {
+        set.status = 404;
+        return `Project not found: ${params.id}`;
+      }
+      try {
+        const { newId } = manager.duplicate(params.id);
+        return { projectId: newId };
+      } catch (err) {
+        set.status = 500;
+        return errorMessage(err);
+      }
+    })
+
+    .delete("/api/projects/:id", ({ params, set }) => {
+      if (!manager.has(params.id)) {
+        set.status = 404;
+        return `Project not found: ${params.id}`;
+      }
+      try {
+        manager.delete(params.id);
+        services.detachProject(params.id);
+        return { ok: true };
       } catch (err) {
         set.status = 500;
         return errorMessage(err);
@@ -682,7 +789,12 @@ export function createApp(options: { root?: string } = {}) {
       }
       try {
         const store = manager.get(params.id);
-        const result = await applyEditInstruction(store, parsed.data.instruction);
+        const config = services.getConfig();
+        const result = await applyEditInstruction(store, parsed.data.instruction, {
+          model: config.editorModel,
+          effort: config.editorEffort,
+          apiKey: effectiveEnv(config).ANTHROPIC_API_KEY,
+        });
         manager.save(params.id, store);
         return result;
       } catch (err) {

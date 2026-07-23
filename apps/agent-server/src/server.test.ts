@@ -498,3 +498,137 @@ test("POST /api/projects with unknown projectId → 404", async () => {
   const res = await ctx.app.handle(post("/api/projects", { brief: "x", projectId: "ghost" }));
   expect(res.status).toBe(404);
 });
+
+// -- settings -----------------------------------------------------------------
+
+function put(path: string, body: unknown): Request {
+  return new Request(url(path), {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+test("GET /api/settings starts at defaults with no keys set", async () => {
+  const settings = await json<{
+    anthropicKeySet: boolean;
+    falKeySet: boolean;
+    elevenLabsKeySet: boolean;
+    plannerModel: string;
+    plannerEffort: string;
+    editorModel: string;
+    editorEffort: string;
+  }>(await ctx.app.handle(new Request(url("/api/settings"))));
+  expect(settings.anthropicKeySet).toBe(false);
+  expect(settings.falKeySet).toBe(false);
+  expect(settings.elevenLabsKeySet).toBe(false);
+  expect(settings.plannerModel).toBeTruthy();
+  expect(settings.editorEffort).toBeTruthy();
+});
+
+test("PUT then GET /api/settings round-trips with masked previews, never the raw key", async () => {
+  const RAW_KEY = "sk-ant-supersecretvalue1234";
+  const putRes = await json<{ anthropicKeySet: boolean; anthropicKeyPreview: string | null }>(
+    await ctx.app.handle(
+      put("/api/settings", { anthropicApiKey: RAW_KEY, plannerModel: "test-model", plannerEffort: "low" }),
+    ),
+  );
+  expect(putRes.anthropicKeySet).toBe(true);
+  expect(putRes.anthropicKeyPreview).not.toBe(RAW_KEY);
+  expect(putRes.anthropicKeyPreview).not.toContain("supersecretvalue");
+
+  const getRes = await json<{
+    anthropicKeySet: boolean;
+    anthropicKeyPreview: string | null;
+    plannerModel: string;
+    plannerEffort: string;
+  }>(await ctx.app.handle(new Request(url("/api/settings"))));
+  expect(getRes.anthropicKeySet).toBe(true);
+  expect(getRes.anthropicKeyPreview).toBe(putRes.anthropicKeyPreview);
+  expect(getRes.anthropicKeyPreview).not.toContain("supersecretvalue");
+  expect(getRes.plannerModel).toBe("test-model");
+  expect(getRes.plannerEffort).toBe("low");
+});
+
+test("PUT /api/settings with an empty string clears a previously-set key", async () => {
+  await ctx.app.handle(put("/api/settings", { falApiKey: "fal-key-1234567890" }));
+  const cleared = await json<{ falKeySet: boolean; falKeyPreview: string | null }>(
+    await ctx.app.handle(put("/api/settings", { falApiKey: "" })),
+  );
+  expect(cleared.falKeySet).toBe(false);
+  expect(cleared.falKeyPreview).toBeNull();
+});
+
+test("PUT /api/settings rejects an invalid effort value", async () => {
+  const res = await ctx.app.handle(put("/api/settings", { plannerEffort: "extreme" }));
+  expect(res.status).toBe(400);
+});
+
+// -- project rename/duplicate/delete -------------------------------------------
+
+test("PATCH /api/projects/:id renames a project", async () => {
+  const draft = await json<{ projectId: string }>(await ctx.app.handle(post("/api/projects/draft", {})));
+  const renamed = await json<{ summary: string }>(
+    await ctx.app.handle(patch(`/api/projects/${draft.projectId}`, { name: "Renamed Draft" })),
+  );
+  expect(renamed.summary).toContain("Renamed Draft");
+
+  const got = await json<{ project: { metadata: { name: string } } }>(
+    await ctx.app.handle(new Request(url(`/api/projects/${draft.projectId}`))),
+  );
+  expect(got.project.metadata.name).toBe("Renamed Draft");
+});
+
+test("PATCH /api/projects/:id → 404 for unknown project", async () => {
+  const res = await ctx.app.handle(patch("/api/projects/ghost", { name: "x" }));
+  expect(res.status).toBe(404);
+});
+
+test("PATCH /api/projects/:id → 400 for an empty name", async () => {
+  const draft = await json<{ projectId: string }>(await ctx.app.handle(post("/api/projects/draft", {})));
+  const res = await ctx.app.handle(patch(`/api/projects/${draft.projectId}`, { name: "" }));
+  expect(res.status).toBe(400);
+});
+
+test("POST /api/projects/:id/duplicate clones a project under a fresh id", async () => {
+  const draft = await json<{ projectId: string }>(await ctx.app.handle(post("/api/projects/draft", {})));
+  await ctx.app.handle(patch(`/api/projects/${draft.projectId}`, { name: "Source" }));
+
+  const dup = await json<{ projectId: string }>(
+    await ctx.app.handle(post(`/api/projects/${draft.projectId}/duplicate`)),
+  );
+  expect(dup.projectId).not.toBe(draft.projectId);
+
+  const got = await json<{ project: { metadata: { name: string } } }>(
+    await ctx.app.handle(new Request(url(`/api/projects/${dup.projectId}`))),
+  );
+  expect(got.project.metadata.name).toBe("Source (copy)");
+});
+
+test("POST /api/projects/:id/duplicate → 404 for unknown project", async () => {
+  const res = await ctx.app.handle(post("/api/projects/ghost/duplicate"));
+  expect(res.status).toBe(404);
+});
+
+test("DELETE /api/projects/:id removes the project and detaches library rows", async () => {
+  const draft = await json<{ projectId: string }>(await ctx.app.handle(post("/api/projects/draft", {})));
+  const upload = await uploadBrief(draft.projectId);
+  expect(ctx.services.assetPurposes(draft.projectId).size).toBeGreaterThan(0);
+
+  const del = await json<{ ok: boolean }>(
+    await ctx.app.handle(new Request(url(`/api/projects/${draft.projectId}`), { method: "DELETE" })),
+  );
+  expect(del.ok).toBe(true);
+
+  const missing = await ctx.app.handle(new Request(url(`/api/projects/${draft.projectId}`)));
+  expect(missing.status).toBe(404);
+  expect(ctx.manager.list().map((p) => p.id)).not.toContain(draft.projectId);
+  expect(ctx.services.assetPurposes(draft.projectId).size).toBe(0);
+  // The uploaded asset itself is untouched by detaching the project.
+  expect(ctx.services.library.getAsset(upload.assetId)).toBeDefined();
+});
+
+test("DELETE /api/projects/:id → 404 for unknown project", async () => {
+  const res = await ctx.app.handle(new Request(url("/api/projects/ghost"), { method: "DELETE" }));
+  expect(res.status).toBe(404);
+});

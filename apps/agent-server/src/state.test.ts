@@ -110,3 +110,80 @@ test("renders index records urls and skips missing files", async () => {
   expect(listed[0].url).toBe("/media/renders/real.mp4");
   expect(listed[0].createdAt).toBeTruthy();
 });
+
+// -- rename -------------------------------------------------------------------
+
+test("rename persists across a fresh manager (reload via get)", () => {
+  const { id } = manager.create();
+  manager.rename(id, "New Name");
+  expect(manager.get(id).getProject().metadata.name).toBe("New Name");
+
+  const fresh = new ProjectsManager(root);
+  expect(fresh.get(id).getProject().metadata.name).toBe("New Name");
+  expect(fresh.list().find((p) => p.id === id)?.name).toBe("New Name");
+});
+
+// -- duplicate ----------------------------------------------------------------
+
+test("duplicate produces a new id, independent state, and a (copy) suffix", () => {
+  const { id, store } = manager.create();
+  store.dispatch({ type: "update_project_settings", params: { name: "Original" } });
+
+  const { newId } = manager.duplicate(id);
+  expect(newId).not.toBe(id);
+
+  const copy = manager.get(newId);
+  expect(copy.getProject().metadata.name).toBe("Original (copy)");
+  expect(copy.getProject().metadata.id).not.toBe(store.getProject().metadata.id);
+
+  // Mutate the copy — the original is untouched.
+  copy.dispatch({ type: "update_project_settings", params: { name: "Mutated Copy" } });
+  expect(manager.get(newId).getProject().metadata.name).toBe("Mutated Copy");
+  expect(manager.get(id).getProject().metadata.name).toBe("Original");
+
+  // Both persisted independently to disk.
+  const fresh = new ProjectsManager(root);
+  expect(fresh.get(id).getProject().metadata.name).toBe("Original");
+  expect(fresh.get(newId).getProject().metadata.name).toBe("Mutated Copy");
+});
+
+test("duplicate carries the plan over under the new id when one exists", () => {
+  const { id } = manager.create();
+  const plan = buildMockPlan("a neon city at night", 15);
+  manager.savePlan(id, plan);
+
+  const { newId } = manager.duplicate(id);
+  const copiedPlan = manager.getPlan(newId);
+  expect(copiedPlan?.title).toBe(plan.title);
+  expect(copiedPlan?.shots.length).toBe(plan.shots.length);
+});
+
+test("duplicate without a plan leaves the copy plan-less", () => {
+  const { id } = manager.create();
+  const { newId } = manager.duplicate(id);
+  expect(manager.getPlan(newId)).toBeUndefined();
+});
+
+// -- delete ---------------------------------------------------------------------
+
+test("delete removes the project files; get/list no longer show it", () => {
+  const { id } = manager.create();
+  const plan = buildMockPlan("a quiet mountain lake", 10);
+  manager.savePlan(id, plan);
+  expect(existsSync(join(root, "projects", `${id}.json`))).toBe(true);
+  expect(existsSync(join(root, "plans", `${id}.json`))).toBe(true);
+
+  manager.delete(id);
+
+  expect(existsSync(join(root, "projects", `${id}.json`))).toBe(false);
+  expect(existsSync(join(root, "plans", `${id}.json`))).toBe(false);
+  expect(manager.has(id)).toBe(false);
+  expect(manager.list().map((p) => p.id)).not.toContain(id);
+  expect(() => manager.get(id)).toThrow(/Project not found/);
+});
+
+test("delete on a project with no plan file does not throw", () => {
+  const { id } = manager.create();
+  expect(() => manager.delete(id)).not.toThrow();
+  expect(manager.has(id)).toBe(false);
+});

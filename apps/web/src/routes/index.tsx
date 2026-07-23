@@ -4,6 +4,8 @@ import { CanvasBoard } from '../vdx/components/CanvasBoard'
 import { ChatPanel } from '../vdx/components/ChatPanel'
 import { LibraryPanel } from '../vdx/components/LibraryPanel'
 import { PreviewPanel } from '../vdx/components/PreviewPanel'
+import { ProjectMenu } from '../vdx/components/ProjectMenu'
+import { SettingsPanel } from '../vdx/components/SettingsPanel'
 import { StatusBar } from '../vdx/components/StatusBar'
 import { Storyboard } from '../vdx/components/Storyboard'
 import { TimelineViewer } from '../vdx/components/TimelineViewer'
@@ -53,6 +55,16 @@ function Home() {
     render,
     loadProject,
     refreshProjectList,
+    newProject,
+    renameProject,
+    duplicateProject,
+    deleteProject,
+    settings,
+    settingsLoading,
+    settingsSaving,
+    settingsError,
+    loadSettings,
+    saveSettings,
   } = director
 
   const [leftTab, setLeftTab] = useState<LeftTab>('chat')
@@ -60,6 +72,7 @@ function Home() {
   const [selectedShotId, setSelectedShotId] = useState<string | null>(null)
   const [briefMode, setBriefMode] = useState(false)
   const [dragActive, setDragActive] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const dragDepthRef = useRef(0)
 
   // Split layout: one nodule at the T-junction of the chat/library column and
@@ -144,22 +157,32 @@ function Home() {
         <h1 className="font-heading text-base font-semibold tracking-tight">VDX·DIRECTOR</h1>
         <span className="text-xs text-muted-foreground">agent video editor</span>
         <div className="ml-auto flex items-center gap-2">
-          <select
-            className="vdx-well h-8 max-w-56 border-0 bg-transparent px-3 text-xs text-foreground outline-none"
-            value={projectId ?? ''}
-            disabled={busy}
-            onFocus={refreshProjectList}
-            onChange={(e) => loadProject(e.target.value)}
+          <ProjectMenu
+            projects={projects}
+            projectId={projectId}
+            busy={busy}
+            onSelect={loadProject}
+            onRefresh={refreshProjectList}
+            onNewProject={newProject}
+            onRename={renameProject}
+            onDuplicate={duplicateProject}
+            onDelete={deleteProject}
+          />
+          <button
+            type="button"
+            title="Settings"
+            aria-label="Open settings"
+            className="vdx-pill-ghost flex size-8 shrink-0 items-center justify-center"
+            onClick={() => setSettingsOpen(true)}
           >
-            <option value="" disabled>
-              {projects.length > 0 ? 'Open a project…' : 'No projects yet'}
-            </option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+            <svg viewBox="0 0 24 24" className="size-4 fill-none stroke-current stroke-2" aria-hidden>
+              <circle cx="12" cy="12" r="3.2" />
+              <path
+                strokeLinecap="round"
+                d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"
+              />
+            </svg>
+          </button>
         </div>
       </header>
 
@@ -325,6 +348,18 @@ function Home() {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {settingsOpen ? (
+        <SettingsPanel
+          onClose={() => setSettingsOpen(false)}
+          settings={settings}
+          loading={settingsLoading}
+          error={settingsError}
+          saving={settingsSaving}
+          onLoad={loadSettings}
+          onSave={saveSettings}
+        />
       ) : null}
     </div>
   )

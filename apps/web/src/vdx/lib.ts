@@ -6,10 +6,13 @@
 import type {
   ElementType,
   MediaTime,
+  ModelEffort,
+  SettingsResponse,
   TProject,
   TScene,
   TimelineElement,
   TimelineTrack,
+  UpdateSettingsRequest,
 } from "./types";
 
 export const TICKS_PER_SECOND = 120_000;
@@ -323,4 +326,73 @@ export function buildTimelineRows(project: TProject): TimelineLayout {
   }
 
   return { rows, durationSec };
+}
+
+// ---------------------------------------------------------------------------
+// Settings — model/effort choices and the save-diff helper
+// ---------------------------------------------------------------------------
+
+/** The 3 model choices offered for both the Planner and Editor Chat pickers. */
+export const MODEL_OPTIONS: { value: string; label: string }[] = [
+  { value: "claude-opus-4-8", label: "Opus 4.8" },
+  { value: "claude-sonnet-5", label: "Sonnet 5" },
+  { value: "claude-haiku-4-5", label: "Haiku 4.5" },
+];
+
+export const EFFORT_OPTIONS: { value: ModelEffort; label: string }[] = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "xhigh", label: "Extra High" },
+  { value: "max", label: "Max" },
+];
+
+/** In-progress edits held by the Settings panel, before diffing against `loaded`. */
+export interface SettingsFormEdits {
+  anthropicApiKey: string;
+  anthropicCleared: boolean;
+  falApiKey: string;
+  falCleared: boolean;
+  elevenLabsApiKey: string;
+  elevenLabsCleared: boolean;
+  plannerModel: string;
+  plannerEffort: ModelEffort;
+  editorModel: string;
+  editorEffort: ModelEffort;
+}
+
+/**
+ * Build the PUT /api/settings body from the loaded settings and the form's
+ * in-progress edits — only fields the user actually touched are included:
+ *  - a key input contributes its (trimmed) value only if non-empty, or an
+ *    explicit "" if the user clicked Clear on a previously-set key;
+ *  - a select contributes its value only if it differs from what was loaded.
+ * An untouched, still-blank key field is omitted rather than sent as "",
+ * so the server never accidentally clears a key the user never edited.
+ */
+export function buildSettingsPatch(
+  loaded: SettingsResponse,
+  edits: SettingsFormEdits,
+): UpdateSettingsRequest {
+  const patch: UpdateSettingsRequest = {};
+
+  const applyKey = (
+    field: "anthropicApiKey" | "falApiKey" | "elevenLabsApiKey",
+    typed: string,
+    cleared: boolean,
+  ) => {
+    const trimmed = typed.trim();
+    if (trimmed.length > 0) patch[field] = trimmed;
+    else if (cleared) patch[field] = "";
+  };
+  applyKey("anthropicApiKey", edits.anthropicApiKey, edits.anthropicCleared);
+  applyKey("falApiKey", edits.falApiKey, edits.falCleared);
+  applyKey("elevenLabsApiKey", edits.elevenLabsApiKey, edits.elevenLabsCleared);
+
+  if (edits.plannerModel !== loaded.plannerModel) patch.plannerModel = edits.plannerModel;
+  if (edits.plannerEffort !== loaded.plannerEffort) patch.plannerEffort = edits.plannerEffort;
+  if (edits.editorModel !== loaded.editorModel) patch.editorModel = edits.editorModel;
+  if (edits.editorEffort !== loaded.editorEffort) patch.editorEffort = edits.editorEffort;
+
+  return patch;
 }
