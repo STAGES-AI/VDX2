@@ -134,3 +134,69 @@
     @apply text-foreground
   }
 }
+
+/* ---- Split-resize nodule (Black Mamba workspace design parity) ----
+   4-way resize nodule at the T-junction where the chat/library column meets
+   the preview/board split — drag to rebalance both axes at once, matching
+   .bm-resize-node from the Black Mamba workspace (docs/black-mamba-workspace-design.md). */
+.vdx-resize-node {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #1a191f;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  cursor: move;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2.5px;
+  place-content: center;
+  padding: 4px;
+  z-index: 30;
+  touch-action: none;
+  user-select: none;
+  transition: background 120ms ease;
+  transform: translate(-50%, -50%);
+}
+.vdx-resize-node span {
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: #6b6a72;
+  transition: background 120ms ease;
+}
+.vdx-resize-node:hover,
+.vdx-resize-node.is-dragging {
+  background: #26252c;
+}
+.vdx-resize-node:hover span,
+.vdx-resize-node.is-dragging span {
+  background: #d84c4c;
+}
+.vdx-resize-node.is-dragging {
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.vdx-resize-hint {
+  position: absolute;
+  top: 8px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #151418;
+  border-radius: 100px;
+  padding: 5px 10px;
+  box-shadow: 0 6px 15px -2px rgba(0, 0, 0, 0.4);
+  font-size: 11px;
+  color: #7c7a82;
+  pointer-events: none;
+  z-index: 5;
+}
+.vdx-resize-hint-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #5bbf97;
+  flex: none;
+}

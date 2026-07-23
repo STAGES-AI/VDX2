@@ -8,3 +8,6 @@ docs/
 
 # moon runtime cache
 .moon/cache/
+
+# VDX agent runtime state (projects, media, cache, renders)
+.vdx/

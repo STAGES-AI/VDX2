@@ -47,6 +47,30 @@ moon run api:dev       # localhost:8787
 moon run desktop:dev   # see apps/desktop/README.md
 ```
 
+## AI video agent (VDX)
+
+A chat-driven video agent lives alongside the editor rewrite: `apps/agent-server` (Elysia API + MCP server) and a chat/canvas/storyboard/timeline UI in `apps/web`. It runs entirely offline in mock mode (no API keys required) — set `ANTHROPIC_API_KEY`, `FAL_KEY`, and/or `ELEVENLABS_API_KEY` to switch on real planning, generation, and voices.
+
+**Run it and view it in a browser:**
+
+```sh
+bun install                 # once, from the repo root
+
+# terminal 1 — agent API on :8790 (chat, uploads, render jobs, SSE, MCP)
+bun run server
+
+# terminal 2 — web UI on :5173
+bun run web
+```
+
+Then open **http://localhost:5173**. Type a brief in the chat panel (or upload reference images/video/audio/.md/.pdf/.docx first) to start directing a video — plans, generations, and renders stream in live.
+
+Command-line alternative (brief → rendered MP4, no browser needed):
+
+```sh
+bun run demo "A 20-second teaser for ..." 20
+```
+
 ## Contributing
 
 We're not set up to take outside contributions yet while the architecture is being designed. If you want to follow along, ask questions, or just hang out, [join the Discord](https://discord.gg/zmR9N35cjK) or [open an issue](https://github.com/opencut-app/opencut/issues).
