@@ -1,0 +1,18 @@
+{
+  "name": "vdx2-monorepo",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "bun test packages",
+    "demo": "bun run apps/agent-server/src/demo.ts",
+    "server": "bun run apps/agent-server/src/index.ts",
+    "web": "bun run --cwd apps/web dev"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
+  }
+}

@@ -6,8 +6,12 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-    --font-heading: 'Playfair Display', serif;
-    --font-sans: 'Inter Variable', sans-serif;
+    /* Black Mamba has no serif — Inter (UI) + Kode Mono (code, terminal,
+       display/hero). font-heading is repointed to Kode Mono so every
+       h1-h6 (see @layer base below) picks it up automatically. */
+    --font-heading: 'Kode Mono', ui-monospace, SFMono-Regular, 'SF Mono', monospace;
+    --font-sans: 'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    --font-mono: 'Kode Mono', ui-monospace, SFMono-Regular, 'SF Mono', monospace;
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -48,73 +52,116 @@
     --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* ---- Black Mamba design key ----
+   VDX is dark-only (see routes/__root.tsx), so :root and .dark share one
+   palette: the obsidian tokens from docs/black-mamba-workspace-design.md
+   §3, reconciled against the actual shipped values in black-mamba.css. */
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
+    --background: #0b0b0d;
+    --foreground: #f2f2f3;
+    --card: #100f12;
+    --card-foreground: #f2f2f3;
+    --popover: #1a191f;
+    --popover-foreground: #f2f2f3;
+    --primary: #d84c4c;
+    --primary-foreground: #ffffff;
+    --secondary: #151418;
+    --secondary-foreground: #f2f2f3;
+    --muted: #151418;
+    --muted-foreground: #7c7a82;
+    --accent: #1c1b21;
+    --accent-foreground: #f2f2f3;
+    --destructive: #d84c4c;
+    --border: rgba(255, 255, 255, 0.06);
+    --input: #0c0b0e;
+    --ring: #d84c4c;
+    --chart-1: #c9892f;
+    --chart-2: #5bbf97;
+    --chart-3: #c084fc;
+    --chart-4: #6e8be8;
+    --chart-5: #7c7a82;
     --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+    --sidebar: #0d0c0f;
+    --sidebar-foreground: #f2f2f3;
+    --sidebar-primary: #d84c4c;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #151418;
+    --sidebar-accent-foreground: #f2f2f3;
+    --sidebar-border: rgba(255, 255, 255, 0.06);
+    --sidebar-ring: #d84c4c;
+
+    /* raw tokens for utilities below that don't go through Tailwind's
+       semantic layer (surfaces, wells, chips) */
+    --bm-bg: #0b0b0d;
+    --bm-sidebar: #0d0c0f;
+    --bm-panel: #100f12;
+    --bm-raised: #151418;
+    --bm-hover: #1c1b21;
+    --bm-well: #0c0b0e;
+    --bm-skeleton: #1a191f;
+    --bm-c1: #f2f2f3;
+    --bm-c2: #b6b5bb;
+    --bm-c3: #7c7a82;
+    --bm-c4: #525058;
+    --bm-red: #d84c4c;
+    --bm-amber: #c9892f;
+    --bm-green: #5bbf97;
+    --bm-violet: #c084fc;
+    --bm-blue: #6e8be8;
 }
 
-.dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
+/* .dark mirrors :root 1:1 — kept as a distinct block only so the viewer's
+   theme toggle (which stamps data-theme, not .dark) can't desync it, and so
+   a future light mode has a clear place to diverge without touching :root. */
+.dark,
+:root[data-theme='dark'] {
+    --background: #0b0b0d;
+    --foreground: #f2f2f3;
+    --card: #100f12;
+    --card-foreground: #f2f2f3;
+    --popover: #1a191f;
+    --popover-foreground: #f2f2f3;
+    --primary: #d84c4c;
+    --primary-foreground: #ffffff;
+    --secondary: #151418;
+    --secondary-foreground: #f2f2f3;
+    --muted: #151418;
+    --muted-foreground: #7c7a82;
+    --accent: #1c1b21;
+    --accent-foreground: #f2f2f3;
+    --destructive: #d84c4c;
+    --border: rgba(255, 255, 255, 0.06);
+    --input: #0c0b0e;
+    --ring: #d84c4c;
+    --chart-1: #c9892f;
+    --chart-2: #5bbf97;
+    --chart-3: #c084fc;
+    --chart-4: #6e8be8;
+    --chart-5: #7c7a82;
+    --sidebar: #0d0c0f;
+    --sidebar-foreground: #f2f2f3;
+    --sidebar-primary: #d84c4c;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #151418;
+    --sidebar-accent-foreground: #f2f2f3;
+    --sidebar-border: rgba(255, 255, 255, 0.06);
+    --sidebar-ring: #d84c4c;
+    --bm-bg: #0b0b0d;
+    --bm-sidebar: #0d0c0f;
+    --bm-panel: #100f12;
+    --bm-raised: #151418;
+    --bm-hover: #1c1b21;
+    --bm-well: #0c0b0e;
+    --bm-skeleton: #1a191f;
+    --bm-c1: #f2f2f3;
+    --bm-c2: #b6b5bb;
+    --bm-c3: #7c7a82;
+    --bm-c4: #525058;
+    --bm-red: #d84c4c;
+    --bm-amber: #c9892f;
+    --bm-green: #5bbf97;
+    --bm-violet: #c084fc;
+    --bm-blue: #6e8be8;
 }
 
 @layer base {
@@ -133,4 +180,167 @@
   p {
     @apply text-foreground
   }
+}
+
+/* ---- Black Mamba shape & surface system ----
+   Pill CTAs, borderless shadow-only panels, inset wells, segmented tabs,
+   chips — the shape/depth vocabulary from docs/black-mamba-workspace-design.md
+   §3 ("Surfaces: no strokes/borders anywhere — depth via fill + shadow only
+   ... Shape & density: pill-shaped buttons; slim inputs"), built as reusable
+   utility classes so every panel/button/input in the app can opt in without
+   re-deriving the recipe per component. */
+
+.vdx-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 999px;
+  background: var(--bm-red);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 6px 16px rgba(216, 76, 76, 0.28);
+  transition: filter 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+}
+.vdx-pill:hover:not(:disabled) { filter: brightness(1.08); }
+.vdx-pill:active:not(:disabled) { filter: brightness(0.96); }
+.vdx-pill:disabled { opacity: 0.45; box-shadow: none; cursor: not-allowed; }
+
+.vdx-pill-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 999px;
+  background: var(--bm-raised);
+  color: var(--bm-c2);
+  transition: background 120ms ease, color 120ms ease, opacity 120ms ease;
+}
+.vdx-pill-ghost:hover:not(:disabled) { background: var(--bm-hover); color: var(--bm-c1); }
+.vdx-pill-ghost:disabled { opacity: 0.4; cursor: not-allowed; }
+.vdx-pill-ghost[data-active='true'] { background: var(--bm-hover); color: var(--bm-c1); }
+
+.vdx-well {
+  background: var(--bm-well);
+  border-radius: 999px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+.vdx-well:focus-within {
+  box-shadow: inset 0 0 0 999px rgba(255, 255, 255, 0.015), 0 0 16px rgba(216, 76, 76, 0.18);
+}
+
+.vdx-panel {
+  background: var(--bm-panel);
+  border-radius: 10px;
+  box-shadow: 0 14px 34px -8px rgba(0, 0, 0, 0.55), 0 4px 9px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.vdx-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--bm-well);
+  border-radius: 9px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+  padding: 3px;
+}
+.vdx-seg-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--bm-c3);
+  transition: background 120ms ease, color 120ms ease;
+  cursor: pointer;
+}
+.vdx-seg-item[data-active='true'] { background: var(--bm-hover); color: var(--bm-c1); }
+.vdx-seg-item:hover:not([data-active='true']) { color: var(--bm-c2); }
+
+.vdx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 10px;
+  font-weight: 500;
+  background: var(--bm-raised);
+  color: var(--bm-c2);
+}
+
+/* box-shadow doesn't compose across separate utility classes (later rule
+   wins the whole property), so -y is its own combined rule rather than
+   stacking -t and -b on one element. */
+.vdx-divider-b { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06); }
+.vdx-divider-t { box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.06); }
+.vdx-divider-y { box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.06), 0 1px 0 rgba(255, 255, 255, 0.06); }
+.vdx-divider-r { box-shadow: 1px 0 0 rgba(255, 255, 255, 0.06); }
+
+/* ---- Split-resize nodule (Black Mamba workspace design parity) ----
+   4-way resize nodule at the T-junction where the chat/library column meets
+   the preview/board split — drag to rebalance both axes at once, matching
+   .bm-resize-node from the Black Mamba workspace (docs/black-mamba-workspace-design.md). */
+.vdx-resize-node {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #1a191f;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  cursor: move;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2.5px;
+  place-content: center;
+  padding: 4px;
+  z-index: 30;
+  touch-action: none;
+  user-select: none;
+  transition: background 120ms ease;
+  transform: translate(-50%, -50%);
+}
+.vdx-resize-node span {
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: #6b6a72;
+  transition: background 120ms ease;
+}
+.vdx-resize-node:hover,
+.vdx-resize-node.is-dragging {
+  background: #26252c;
+}
+.vdx-resize-node:hover span,
+.vdx-resize-node.is-dragging span {
+  background: #d84c4c;
+}
+.vdx-resize-node.is-dragging {
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.vdx-resize-hint {
+  position: absolute;
+  top: 8px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #151418;
+  border-radius: 100px;
+  padding: 5px 10px;
+  box-shadow: 0 6px 15px -2px rgba(0, 0, 0, 0.4);
+  font-size: 11px;
+  color: #7c7a82;
+  pointer-events: none;
+  z-index: 5;
+}
+.vdx-resize-hint-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #5bbf97;
+  flex: none;
 }
