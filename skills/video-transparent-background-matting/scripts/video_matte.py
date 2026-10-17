@@ -17,6 +17,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import threading
 import time
 import uuid
 
@@ -34,6 +35,52 @@ def run(command, data=None):
                            ' '.join(str(x) for x in command[:3]) + '\n' +
                            result.stderr.decode(errors='replace').strip())
     return result.stdout
+
+
+class FramePipe:
+    """Stream frame stdout while concurrently draining a bounded stderr tail.
+
+    No log files or temporary paths. Call finish() in a finally block even when
+    frame processing raises, so pipe handles and the child are always collected.
+    """
+    def __init__(self, command, stderr_limit=16384):
+        if stderr_limit < 256:
+            raise ValueError('stderr summary limit must be at least 256 bytes')
+        self.process = subprocess.Popen([str(x) for x in command], stdin=subprocess.DEVNULL,
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.stdout = self.process.stdout
+        self.stderr_limit = stderr_limit
+        self._tail = bytearray()
+        self._total = 0
+        self._result = None
+        self._reader = threading.Thread(target=self._drain_stderr, daemon=True)
+        self._reader.start()
+
+    def _drain_stderr(self):
+        try:
+            while True:
+                block = self.process.stderr.read(8192)
+                if not block:
+                    break
+                self._total += len(block)
+                self._tail.extend(block)
+                if len(self._tail) > self.stderr_limit:
+                    del self._tail[:-self.stderr_limit]
+        finally:
+            self.process.stderr.close()
+
+    def finish(self):
+        if self._result is not None:
+            return self._result
+        self.stdout.close()
+        status = self.process.wait()
+        self._reader.join()
+        summary = bytes(self._tail)
+        if self._total > self.stderr_limit:
+            prefix = ('[stderr truncated: %d bytes total; tail follows]\n' % self._total).encode()
+            summary = prefix + summary[-(self.stderr_limit-len(prefix)):]
+        self._result = (status, summary)
+        return self._result
 
 
 def sha256(path):
@@ -244,7 +291,8 @@ class Matte:
     def prepare_accent_reference(self, rgb):
         background = self.background(rgb)
         body = self.silhouette(rgb, background)
-        region = self.accents & ~morph(body, self.config.edge_radius, True)
+        preserve_radius = max(self.config.edge_radius, self.config.outer_radius)
+        region = self.accents & ~morph(body, preserve_radius, True)
         distance = np.linalg.norm(background - rgb.astype(np.float32), axis=2)
         samples = region & (distance > self.config.accent_reference_contrast)
         samples = morph(samples, 1)
@@ -276,7 +324,8 @@ class Matte:
             raise ValueError('Accent ROIs require a measured reference frame')
         v = rgb.astype(np.float32); delta = background - v
         distance = np.linalg.norm(delta, axis=2)
-        preserve = morph(shape, self.config.edge_radius, True)
+        preserve_radius = max(self.config.edge_radius, self.config.outer_radius)
+        preserve = morph(shape, preserve_radius, True) | (rgba[:, :, 3] > 0)
         allowed = self.accents & ~preserve
         candidate = allowed & (distance > 3)
         support = candidate & (distance > self.config.foreground_distance)
@@ -385,9 +434,9 @@ def verify(source, output, meta, ffmpeg, ffprobe):
             raise RuntimeError('Export geometry, timing or frame count changed: '+name)
         if name.endswith('.webm') and details['audio']:
             raise RuntimeError('Browser WebM must be explicitly silent')
-        proc = subprocess.Popen([ffmpeg, '-v', 'error', *decoder, '-i', str(path),
-                                 '-map', '0:v:0', '-vf', 'alphaextract,format=gray',
-                                 '-an', '-f', 'rawvideo', 'pipe:1'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        proc = FramePipe([ffmpeg, '-v', 'error', *decoder, '-i', str(path),
+                          '-map', '0:v:0', '-vf', 'alphaextract,format=gray',
+                          '-an', '-f', 'rawvideo', 'pipe:1'])
         count=0; total=0; maximum=0; partial=0; border=0
         try:
             while True:
@@ -403,7 +452,7 @@ def verify(source, output, meta, ffmpeg, ffprobe):
                 border+=int((actual[0]>0).sum()+(actual[-1]>0).sum()+(actual[:,0]>0).sum()+(actual[:,-1]>0).sum())
                 count+=1
         finally:
-            proc.stdout.close(); errors=proc.stderr.read(); proc.stderr.close(); status=proc.wait()
+            status, errors = proc.finish()
         if status or errors.strip() or count != meta['frames'] or maximum>2:
             raise RuntimeError('Export alpha verification failed: '+name+' '+errors.decode(errors='replace'))
         report['exports'][name]=dict(frames=count, dimensions=[meta['width'],meta['height']],
@@ -446,8 +495,8 @@ def render(source, output, meta, args):
     elif args.accent_reference is not None:
         raise ValueError('Accent reference requires explicit --accent-roi')
     frames=output/'frames';frames.mkdir()
-    proc=subprocess.Popen([args.ffmpeg,'-v','error','-noautorotate','-i',str(source),'-map','0:v:0',
-                           '-an','-f','rawvideo','-pix_fmt','rgb24','pipe:1'],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    proc=FramePipe([args.ffmpeg,'-v','error','-noautorotate','-i',str(source),'-map','0:v:0',
+                    '-an','-f','rawvideo','-pix_fmt','rgb24','pipe:1'])
     stats=[];start=time.time()
     try:
         while True:
@@ -460,7 +509,7 @@ def render(source, output, meta, args):
             Image.fromarray(rgba).save(frames/('%06d.png'%len(stats)),compress_level=3)
             stat['frame']=len(stats);stats.append(stat)
     finally:
-        proc.stdout.close();errors=proc.stderr.read();proc.stderr.close();status=proc.wait()
+        status, errors = proc.finish()
     if status or errors.strip() or len(stats)!=meta['frames']:
         raise RuntimeError('Source decode/frame count failed: '+errors.decode(errors='replace'))
     base=[args.ffmpeg,'-v','error','-n','-framerate',meta['rate'],'-i',str(frames/'%06d.png')]

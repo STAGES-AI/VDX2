@@ -13,6 +13,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 
 import numpy as np
@@ -92,6 +93,44 @@ class ImageMattingTests(unittest.TestCase):
         self.assertTrue(np.array_equal(body[preserved],accent_only[preserved]))
         self.assertAlmostEqual(int(rgba[20,114,3])/255,.4,delta=.02)
         self.assertLess(float(np.abs(rgba[20,114,:3].astype(int)-[245,210,30]).mean()),4)
+
+    def test_accent_overlap_preserves_full_body_band_when_outer_exceeds_edge(self):
+        width,height=136,92
+        reference=np.full((height,width,3),255,np.uint8)
+        reference[16:78,14:85]=(220,90,20)
+        # A detached accent lies inside part of the body's wider outer trimap.
+        # Its explicit ROI overlaps that band and some body pixels.
+        reference[20:42,89:113]=(245,210,30)
+        config=configuration(seeds=[(40,40)],edge_radius=1,outer_radius=6,
+                             search_radius=8,accents=[(78,12,45,40)])
+        engine=helper.Matte(width,height,config)
+        engine.prepare_accent_reference(reference)
+        plate=engine.background(reference)
+        incoming,shape,_=engine.body(reference,plate)
+        support=incoming[:,:,3]>0
+        beyond_old_preserve=support & ~helper.morph(shape,config.edge_radius,True)
+        self.assertTrue(np.any(beyond_old_preserve & engine.accents),
+                        'Fixture must expose body alpha beyond the old preserve radius')
+        refined=engine.refine_accents(reference,incoming,shape,plate)
+        self.assertTrue(np.array_equal(incoming[support],refined[support]),
+                        'Accent refinement must preserve every incoming body-alpha pixel')
+
+    def test_frame_pipe_drains_large_stderr_before_stdout_without_deadlock(self):
+        program="import os; os.write(2,b'error-detail\\n'*65536); os.write(1,b'frame')"
+        pipe=helper.FramePipe([sys.executable,'-c',program],stderr_limit=1024)
+        result={}
+        reader=threading.Thread(target=lambda:result.setdefault('stdout',pipe.stdout.read(5)),daemon=True)
+        reader.start();reader.join(timeout=5)
+        if reader.is_alive():
+            pipe.process.kill();reader.join(timeout=2);pipe.finish()
+            self.fail('stderr blocked stdout: child exceeded pipe-buffer capacity')
+        status,summary=pipe.finish()
+        self.assertEqual(status,0)
+        self.assertEqual(result.get('stdout'),b'frame')
+        self.assertTrue(summary)
+        self.assertLessEqual(len(summary),1024)
+        self.assertIn(b'truncated',summary)
+        self.assertIn(b'error-detail',summary)
 
     def test_storage_safety_rejects_input_within_output(self):
         with tempfile.TemporaryDirectory(dir=WORK) as td:
