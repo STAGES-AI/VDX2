@@ -362,7 +362,22 @@ def hash_audio(path, ffmpeg):
 
 
 def verify(source, output, meta, ffmpeg, ffprobe):
-    report = dict(expected_frames=meta['frames'], expected_rate=meta['rate'], exports={})
+    record_path = output/'render.json'
+    if not record_path.is_file():
+        raise ValueError('Verification requires the recorded render.json source identity')
+    try:
+        recorded = json.loads(record_path.read_text(encoding='utf-8'))
+    except (ValueError, OSError) as error:
+        raise ValueError('Cannot read the recorded render identity: '+str(error))
+    current_source_hash = sha256(source)
+    render_source_hash = recorded.get('source_sha256')
+    if current_source_hash != render_source_hash:
+        raise ValueError('Current input SHA-256 does not match the recorded render source')
+    if recorded.get('metadata') != meta:
+        raise ValueError('Current input metadata does not match the recorded render source metadata')
+    report = dict(current_source_sha256=current_source_hash,
+                  render_source_sha256=render_source_hash,
+                  expected_frames=meta['frames'], expected_rate=meta['rate'], exports={})
     for name, decoder in [('transparent.mov', []), ('transparent.webm', ['-c:v', 'libvpx-vp9'])]:
         path = output/name
         details = probe(path, ffprobe)
@@ -399,6 +414,8 @@ def verify(source, output, meta, ffmpeg, ffprobe):
     report['original_audio_packet_hash_preserved'] = (hash_audio(source,ffmpeg)==hash_audio(output/'transparent.mov',ffmpeg)) if meta['audio'] else None
     if meta['audio'] and not report['original_audio_packet_hash_preserved']:
         raise RuntimeError('Master did not preserve original compressed audio packet bytes')
+    if sha256(source) != current_source_hash:
+        raise RuntimeError('Source changed during verification; no validation report was written')
     report['visual_review_required']=True
     report['limitations']='Reconstructed alpha is an estimate. Numeric checks do not establish artifact-free edges, correct negative spaces, playback support, or user acceptance.'
     destination = output/'validation.json'

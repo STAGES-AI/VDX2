@@ -110,7 +110,7 @@ class ImageMattingTests(unittest.TestCase):
 
 
 class VideoRoundTripTests(unittest.TestCase):
-    def roundtrip(self,rate,make_gif=False):
+    def roundtrip(self,rate,make_gif=False,wrong_source=False):
         with tempfile.TemporaryDirectory(prefix='matte-e2e-',dir=WORK) as td:
             root=Path(td);inputs=root/'inputs';inputs.mkdir()
             for n in range(6):Image.fromarray(fixture(shift=n%2)[0]).save(inputs/('%06d.png'%n))
@@ -148,6 +148,36 @@ class VideoRoundTripTests(unittest.TestCase):
                 self.assertEqual(helper.main(common+['--mode','verify']),0)
             self.assertEqual((output/'validation.json').read_bytes(),original_report)
             self.assertEqual(len(list(output.glob('validation-recheck-*.json'))),1)
+            if wrong_source:
+                # Same bytes at a different path are a legitimate source copy.
+                copied=root/'same-bytes-copy.mp4';copied.write_bytes(source.read_bytes())
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(helper.main(['--input',str(copied)]+common[2:]+['--mode','verify']),0)
+                altered=root/'different-visual-source.mp4'
+                helper.run([FFMPEG,'-v','error','-n','-i',str(source),'-map','0:v:0','-map','0:a:0',
+                            '-vf','hue=h=120','-c:v','libx264','-pix_fmt','yuv420p','-c:a','copy',str(altered)])
+                self.assertEqual(helper.hash_audio(source,FFMPEG),helper.hash_audio(altered,FFMPEG))
+                self.assertNotEqual(helper.sha256(source),helper.sha256(altered))
+                current=helper.probe(altered,FFPROBE);original=helper.probe(source,FFPROBE)
+                self.assertEqual([current[k] for k in ('width','height','frames','rate')],
+                                 [original[k] for k in ('width','height','frames','rate')])
+                before_files={str(p.relative_to(output)):helper.sha256(p) for p in output.rglob('*') if p.is_file()}
+                with self.assertRaisesRegex(ValueError,'SHA-256'):
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        helper.main(['--input',str(altered)]+common[2:]+['--mode','verify'])
+                after_files={str(p.relative_to(output)):helper.sha256(p) for p in output.rglob('*') if p.is_file()}
+                self.assertEqual(before_files,after_files,'Failed identity verification must not write any output')
+                render_record=json.loads((output/'render.json').read_text())
+                self.assertEqual(report['current_source_sha256'],render_record['source_sha256'])
+                self.assertEqual(report['render_source_sha256'],render_record['source_sha256'])
+                incorrect_metadata=dict(original,frames=original['frames']+1)
+                with self.assertRaisesRegex(ValueError,'metadata'):
+                    helper.verify(source,output,incorrect_metadata,FFMPEG,FFPROBE)
+                record_path=output/'render.json';pending=output/'render-record-held.json';record_path.rename(pending)
+                try:
+                    with self.assertRaisesRegex(ValueError,'render.json'):
+                        helper.verify(source,output,original,FFMPEG,FFPROBE)
+                finally:pending.rename(record_path)
             first=np.asarray(Image.open(output/'frames'/'000000.png'))
             self.assertEqual(int(first[30,42,3]),255)
             self.assertEqual(int(first[51,71,3]),0)
@@ -164,6 +194,9 @@ class VideoRoundTripTests(unittest.TestCase):
 
     def test_2997fps_webm_millisecond_timing_roundtrip(self):
         self.roundtrip('30000/1001')
+
+    def test_same_audio_geometry_wrong_visual_source_is_rejected(self):
+        self.roundtrip('24',wrong_source=True)
 
 
 if __name__=='__main__':
