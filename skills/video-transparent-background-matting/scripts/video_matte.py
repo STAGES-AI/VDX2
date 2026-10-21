@@ -24,7 +24,7 @@ import uuid
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
-DEFAULT_STORAGE_ROOT = Path('/Volumes/personal_folder/__CODEX')
+DEFAULT_STORAGE_ROOT = Path(os.environ['VIDEO_MATTE_STORAGE_ROOT']) if os.environ.get('VIDEO_MATTE_STORAGE_ROOT') else None
 
 
 def run(command, data=None):
@@ -547,7 +547,7 @@ def parser():
     p=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--input',type=Path,required=True)
     p.add_argument('--output-dir',type=Path,required=True)
-    p.add_argument('--storage-root',type=Path,default=DEFAULT_STORAGE_ROOT,help='Authorized output root; defaults to owner NAS; never silently falls back')
+    p.add_argument('--storage-root',type=Path,default=DEFAULT_STORAGE_ROOT,required=DEFAULT_STORAGE_ROOT is None,help='Authorized output root (or VIDEO_MATTE_STORAGE_ROOT); never silently falls back')
     p.add_argument('--ffmpeg',default='ffmpeg');p.add_argument('--ffprobe',default='ffprobe')
     p.add_argument('--mode',choices=['inspect','render','verify'],required=True)
     p.add_argument('--background',type=lambda s:parse_numbers(s,3),default=(250,250,250),help='Inspected pale RGB, e.g. 250,250,250')
