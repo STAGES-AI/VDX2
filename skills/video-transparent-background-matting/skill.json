@@ -1,0 +1,40 @@
+{
+  "id": "video-transparent-background-matting",
+  "name": "Transparent video background removal",
+  "version": "1.0.0",
+  "taxonomy": "workflow",
+  "scope": "talk",
+  "status": "local-workflow-tested-product-runtime-unverified",
+  "oneLine": "Remove video and animation backgrounds with clean moving edges, preserve accents, and verify alpha transparency in MOV, WebM and GIF deliveries.",
+  "description": "A local pale-plate matting and quality-check workflow with an authorized host handoff for CUE; not a native product execution tool.",
+  "costBand": "local-compute",
+  "modes": [
+    "talk",
+    "workflow",
+    "video",
+    "animation",
+    "alpha",
+    "transparency",
+    "background removal"
+  ],
+  "inputs": [
+    "Original video",
+    "Inspected subject seed and plate/mask settings",
+    "Explicit writable output directory"
+  ],
+  "outputs": [
+    "Alpha ProRes4444 master with preserved compatible audio",
+    "Silent alpha WebM",
+    "Baked checkerboard preview",
+    "Optional transparent GIF with format limitations",
+    "All-frame verification record"
+  ],
+  "acceptance": [
+    "Source pixels, identity, frame geometry and timing preserved",
+    "Facial whites remain while true negative spaces are transparent",
+    "Intentional detached accents retained with inspected fade",
+    "All output alpha planes/frame counts decoded and checked",
+    "Visual review scope and residual uncertainty stated"
+  ],
+  "qualityEnvelope": {}
+}
