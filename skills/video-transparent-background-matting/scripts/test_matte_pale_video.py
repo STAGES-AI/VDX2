@@ -229,10 +229,16 @@ class VideoRoundTripTests(unittest.TestCase):
             self.assertEqual((output/'validation.json').read_bytes(),original_report)
             self.assertEqual(len(list(output.glob('validation-recheck-*.json'))),1)
             if wrong_source:
-                # An additional hardlink verifies path independence without duplicating bytes.
-                copied=root/'same-bytes-link.mp4';copied.hardlink_to(source)
-                with contextlib.redirect_stdout(io.StringIO()):
-                    self.assertEqual(helper.main(['--input',str(copied)]+common[2:]+['--mode','verify']),0)
+                # Relocation verifies path independence without copying bytes or requiring hardlinks.
+                relocated=root/'same-bytes-relocated.mp4'
+                source.rename(relocated)
+                try:
+                    self.assertEqual(helper.sha256(relocated),before)
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        self.assertEqual(helper.main(['--input',str(relocated)]+common[2:]+['--mode','verify']),0)
+                finally:
+                    relocated.rename(source)
+                self.assertEqual(helper.sha256(source),before)
                 altered=root/'different-visual-source.mp4'
                 helper.run([FFMPEG,'-v','error','-n','-i',str(source),'-map','0:v:0','-map','0:a:0',
                             '-vf','hue=h=120','-c:v','libx264','-pix_fmt','yuv420p','-c:a','copy',str(altered)])
