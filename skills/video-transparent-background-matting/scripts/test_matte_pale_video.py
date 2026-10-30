@@ -272,6 +272,44 @@ class VideoRoundTripTests(unittest.TestCase):
                     helper.main(common+['--mode','render','--subject-seed','45,42'])
             (Path(WORK)/('synthetic-e2e-'+rate.replace('/','-')+'-validation.json')).write_text(json.dumps(report,indent=2)+'\n')
 
+    def test_negative_audio_offset_is_preserved_and_hash_equal_shift_is_rejected(self):
+        with tempfile.TemporaryDirectory(prefix='matte-negative-audio-',dir=WORK) as td:
+            root=Path(td);inputs=root/'inputs';inputs.mkdir()
+            for n in range(6):Image.fromarray(fixture()[0]).save(inputs/('%06d.png'%n))
+            source=root/'negative-audio.mkv'
+            helper.run([FFMPEG,'-v','error','-n','-framerate','10','-i',str(inputs/'%06d.png'),
+                        '-itsoffset','-0.2','-f','lavfi','-i','sine=frequency=440:sample_rate=48000:duration=0.8',
+                        '-copyts','-map','0:v:0','-map','1:a:0','-frames:v','6','-c:v','libx264','-bf','0',
+                        '-pix_fmt','yuv420p','-c:a','aac','-avoid_negative_ts','disabled',str(source)])
+            metadata=helper.probe(source,FFPROBE)
+            self.assertLess(helper.audio_packet_timing(source,FFPROBE)[1][0][0],Fraction(-1,10))
+            output=root/'result'
+            common=['--input',str(source),'--output-dir',str(output),'--storage-root',str(WORK),
+                    '--ffmpeg',FFMPEG,'--ffprobe',FFPROBE]
+            with contextlib.redirect_stdout(io.StringIO()),contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(helper.main(common+['--mode','render','--subject-seed','45,42']),0)
+            report=json.loads((output/'validation.json').read_text())
+            self.assertTrue(report['original_audio_packet_timing']['preserved'])
+            self.assertLess(Fraction(report['original_audio_packet_timing']['master_first_pts_seconds']),Fraction(-1,10))
+            # This is the former exact master command. It keeps compressed bytes
+            # but changes the offset; acceptance must reject that output.
+            shifted=root/'shifted.mov'
+            helper.run([FFMPEG,'-v','error','-n','-framerate','10','-i',str(output/'frames'/'%06d.png'),
+                        '-i',str(source),'-map','0:v:0','-map','1:a:0?','-map_metadata','-1',
+                        '-c:v','prores_ks','-profile:v','4','-qscale:v','5','-pix_fmt','yuva444p10le',
+                        '-alpha_bits','16','-c:a','copy',str(shifted)])
+            self.assertEqual(helper.hash_audio(source,FFMPEG),helper.hash_audio(shifted,FFMPEG))
+            self.assertEqual(helper.audio_packet_timing(shifted,FFPROBE)[1][0][0],0)
+            with self.assertRaisesRegex(RuntimeError,'audio packet timing'):
+                helper.verify_audio_timing(source,shifted,FFPROBE)
+            master=output/'transparent.mov';held=root/'preserved.mov';master.rename(held);shifted.rename(master)
+            before=set(output.glob('validation*.json'))
+            try:
+                with self.assertRaisesRegex(RuntimeError,'audio packet timing'):
+                    helper.verify(source,output,metadata,FFMPEG,FFPROBE)
+                self.assertEqual(before,set(output.glob('validation*.json')),'Timing failure must not write acceptance')
+            finally:master.rename(shifted);held.rename(master)
+
     def test_short_non768_video_all_frames_audio_silent_webm_and_gif(self):
         self.roundtrip('12',make_gif=True)
 

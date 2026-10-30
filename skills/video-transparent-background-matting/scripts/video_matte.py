@@ -138,6 +138,8 @@ def probe(path, ffprobe):
     rotations = [int(s.get('rotation', 0)) for s in v.get('side_data_list', [])]
     if any(r % 360 for r in rotations) or int(v.get('tags', {}).get('rotate', 0)) % 360:
         raise ValueError('Rotated video requires an explicitly oriented source first')
+    if audio_streams:
+        audio_packet_timing(path, ffprobe)  # Reject unsupported timing during intake, before render.
     return dict(width=int(v['width']), height=int(v['height']),
                 rate=str(rate), time_base=v.get('time_base'), frames=len(times), video_codec=v['codec_name'],
                 audio=any(s['codec_type'] == 'audio' for s in info['streams']),
@@ -417,6 +419,51 @@ def inspection(source, output, meta, ffmpeg):
     return report
 
 
+def audio_packet_timing(path, ffprobe):
+    """Supported audio has finite integer packet timing and a positive timebase.
+
+    Compare the original timeline, including negative preroll; never normalize
+    audio separately from the source video's already-required zero origin.
+    """
+    info = json.loads(run([ffprobe, '-v', 'error', '-select_streams', 'a:0',
+                           '-show_packets', '-show_streams', '-show_entries',
+                           'stream=time_base:packet=pts,dts,duration', '-of', 'json', path]))
+    try:
+        streams = info['streams']
+        if len(streams) != 1:
+            raise ValueError('Expected one audio stream')
+        tick = Fraction(streams[0]['time_base'])
+        if tick <= 0:
+            raise ValueError('Audio timebase must be positive')
+        packets = []
+        for packet in info['packets']:
+            values = tuple(int(packet[key]) * tick for key in ('pts', 'dts', 'duration'))
+            if values[2] <= 0:
+                raise ValueError('Audio packet duration must be positive')
+            packets.append(values)
+        if not packets:
+            raise ValueError('Audio stream has no packets')
+    except (KeyError, TypeError, ValueError, ZeroDivisionError, OverflowError) as error:
+        raise ValueError('Audio without finite packet PTS, DTS, duration and positive timebase needs an explicit timing workflow') from error
+    return tick, packets
+
+
+def verify_audio_timing(source, master, ffprobe):
+    source_tick, expected = audio_packet_timing(source, ffprobe)
+    output_tick, actual = audio_packet_timing(master, ffprobe)
+    # Stream copy can rescale between container ticks. Packet regrouping is
+    # outside this supported envelope, even when byte concatenation is equal.
+    tolerance = max(source_tick, output_tick) + Fraction(2, 1000000)
+    if len(expected) != len(actual):
+        raise RuntimeError('Audio packet timing uses unsupported changed packet boundaries')
+    maximum = max(abs(before - after) for a, b in zip(expected, actual) for before, after in zip(a, b))
+    if maximum > tolerance:
+        raise RuntimeError('Master changed original audio packet timing or extent')
+    return dict(preserved=True, packets=len(expected), max_error_seconds=float(maximum),
+                tolerance_seconds=float(tolerance), source_first_pts_seconds=str(expected[0][0]),
+                master_first_pts_seconds=str(actual[0][0]))
+
+
 def hash_audio(path, ffmpeg):
     return run([ffmpeg, '-v', 'error', '-i', path, '-map', '0:a:0', '-c:a', 'copy',
                 '-f', 'hash', '-hash', 'sha256', 'pipe:1']).decode().strip()
@@ -475,10 +522,11 @@ def verify(source, output, meta, ffmpeg, ffprobe):
     report['original_audio_packet_hash_preserved'] = (hash_audio(source,ffmpeg)==hash_audio(output/'transparent.mov',ffmpeg)) if meta['audio'] else None
     if meta['audio'] and not report['original_audio_packet_hash_preserved']:
         raise RuntimeError('Master did not preserve original compressed audio packet bytes')
+    report['original_audio_packet_timing'] = verify_audio_timing(source, output/'transparent.mov', ffprobe) if meta['audio'] else None
     if sha256(source) != current_source_hash:
         raise RuntimeError('Source changed during verification; no validation report was written')
     report['visual_review_required']=True
-    report['limitations']='Reconstructed alpha is an estimate. Numeric checks do not establish artifact-free edges, correct negative spaces, playback support, or user acceptance.'
+    report['limitations']='Reconstructed alpha is an estimate. Numeric checks do not establish artifact-free edges, correct negative spaces, playback support, or user acceptance. Audio validation supports finite packet timing with unchanged packet boundaries; regrouped packets require an explicit timing workflow.'
     destination = output/'validation.json'
     if destination.exists() or destination.is_symlink():
         destination = output/('validation-recheck-'+uuid.uuid4().hex+'.json')
@@ -508,7 +556,7 @@ def render(source, output, meta, args):
         raise ValueError('Accent reference requires explicit --accent-roi')
     frames=output/'frames';frames.mkdir()
     proc=FramePipe([args.ffmpeg,'-v','error','-noautorotate','-i',str(source),'-map','0:v:0',
-                    '-an','-f','rawvideo','-pix_fmt','rgb24','pipe:1'])
+                    '-fps_mode','passthrough','-an','-f','rawvideo','-pix_fmt','rgb24','pipe:1'])
     stats=[];start=time.time()
     try:
         while True:
@@ -524,8 +572,11 @@ def render(source, output, meta, args):
         status, errors = proc.finish()
     if status or errors.strip() or len(stats)!=meta['frames']:
         raise RuntimeError('Source decode/frame count failed: '+errors.decode(errors='replace'))
+    # Only the master mux needs original negative audio timestamps. Video is
+    # already validated to start at zero; do not normalize either input.
+    preserve_negative_audio = meta['audio'] and audio_packet_timing(source, args.ffprobe)[1][0][0] < 0
     base=[args.ffmpeg,'-v','error','-n','-framerate',meta['rate'],'-i',str(frames/'%06d.png')]
-    master=base+['-i',str(source),'-map','0:v:0','-map','1:a:0?','-map_metadata','-1',
+    master=base[:4]+(['-copyts'] if preserve_negative_audio else [])+base[4:]+['-i',str(source),'-map','0:v:0','-map','1:a:0?','-map_metadata','-1',
                  '-c:v','prores_ks','-profile:v','4','-qscale:v','5','-pix_fmt','yuva444p10le',
                  '-alpha_bits','16','-c:a','copy',str(output/'transparent.mov')]
     run(master)

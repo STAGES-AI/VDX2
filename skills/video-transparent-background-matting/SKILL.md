@@ -17,7 +17,7 @@ Preserve the supplied character, performance, frame geometry and timing. Recover
 
 ## Host and product handoff
 
-The portable Python helper requires an authorized local host with FFmpeg, ffprobe, NumPy and Pillow. A CUE skill-library entry is instructional guidance and does not grant shell access, expose local files, install Python, or create a product tool. Use the current authorized desktop/creative host or an explicit Codex handoff, preserving source and output identities. If the current consumer cannot execute the helper or import the result, name that concrete gap and still deliver the prepared workflow and review evidence. Do not claim a bundled Markdown guide is an executable app feature.
+The portable Python helper requires an authorized local host with FFmpeg supporting `-fps_mode passthrough`, ffprobe, NumPy and Pillow. A CUE skill-library entry is instructional guidance and does not grant shell access, expose local files, install Python, or create a product tool. Use the current authorized desktop/creative host or an explicit Codex handoff, preserving source and output identities. If the current consumer cannot execute the helper or import the result, name that concrete gap and still deliver the prepared workflow and review evidence. Do not claim a bundled Markdown guide is an executable app feature.
 
 Keep source, frames, configuration, logs and outputs in the owner's designated writable task storage. Resolve that storage from the current authorized host; this package has no machine-specific default. Never silently fall back to internal temporary storage or overwrite the input. Paid generation, external uploads and unrelated app installation are not part of this local extraction workflow.
 
