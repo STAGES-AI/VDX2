@@ -1,6 +1,0 @@
-interface:
-  display_name: "Transparent video background removal"
-  short_description: "Clean moving mattes and verified alpha exports"
-  default_prompt: "Use $video-transparent-background-matting to remove this animation background while preserving the character, accents and smooth moving edges, then deliver verified transparent files."
-policy:
-  allow_implicit_invocation: true

@@ -147,6 +147,47 @@ class ImageMattingTests(unittest.TestCase):
                 helper.inspection(root/'unused.mp4',output,dict(frames=1,width=112,height=84),FFMPEG)
             self.assertFalse(forbidden.exists())
 
+    def test_finish_returns_failure_when_child_ignores_both_wait_deadlines(self):
+        from unittest.mock import Mock
+        pipe = helper.FramePipe.__new__(helper.FramePipe)
+        pipe.stdout = Mock()
+        pipe.process = Mock()
+        pipe.process.wait.side_effect = subprocess.TimeoutExpired('stalled-decoder', 1)
+        pipe._reader = Mock()
+        pipe._reader.is_alive.return_value = False
+        pipe._tail = bytearray()
+        pipe._total = 0
+        pipe.stderr_limit = 1024
+        pipe._result = None
+        result = pipe.finish()
+        self.assertNotEqual(result[0], 0, 'Unreaped child must not be accepted')
+        pipe.process.kill.assert_called_once()
+        self.assertEqual(pipe.process.wait.call_count, 2)
+        for call in pipe.process.wait.call_args_list:
+            self.assertGreater(call.kwargs['timeout'], 0)
+            self.assertLessEqual(call.kwargs['timeout'], 60)
+        self.assertGreater(pipe._reader.join.call_args.kwargs['timeout'], 0)
+        self.assertIs(pipe.finish(), result, 'Repeated finish must preserve the original result')
+        self.assertEqual(pipe.process.wait.call_count, 2)
+
+    def test_finish_reports_failure_when_stderr_reader_cannot_finish(self):
+        from unittest.mock import Mock
+        pipe = helper.FramePipe.__new__(helper.FramePipe)
+        pipe.stdout = Mock()
+        pipe.process = Mock()
+        pipe.process.wait.return_value = 0
+        pipe._reader = Mock()
+        pipe._reader.is_alive.return_value = True
+        pipe._tail = bytearray(b'partial decoder diagnostic')
+        pipe._total = len(pipe._tail)
+        pipe.stderr_limit = 1024
+        pipe._result = None
+        status, errors = pipe.finish()
+        self.assertNotEqual(status, 0, 'A live reader cannot be reported as complete')
+        self.assertIn(b'partial decoder diagnostic', errors)
+        self.assertGreater(pipe._reader.join.call_args.kwargs['timeout'], 0)
+        self.assertLessEqual(pipe._reader.join.call_args.kwargs['timeout'], 60)
+
 
 class VideoRoundTripTests(unittest.TestCase):
     def roundtrip(self,rate,make_gif=False,wrong_source=False):
@@ -188,8 +229,8 @@ class VideoRoundTripTests(unittest.TestCase):
             self.assertEqual((output/'validation.json').read_bytes(),original_report)
             self.assertEqual(len(list(output.glob('validation-recheck-*.json'))),1)
             if wrong_source:
-                # Same bytes at a different path are a legitimate source copy.
-                copied=root/'same-bytes-copy.mp4';copied.write_bytes(source.read_bytes())
+                # An additional hardlink verifies path independence without duplicating bytes.
+                copied=root/'same-bytes-link.mp4';copied.hardlink_to(source)
                 with contextlib.redirect_stdout(io.StringIO()):
                     self.assertEqual(helper.main(['--input',str(copied)]+common[2:]+['--mode','verify']),0)
                 altered=root/'different-visual-source.mp4'

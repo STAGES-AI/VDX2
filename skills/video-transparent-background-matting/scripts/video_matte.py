@@ -73,8 +73,20 @@ class FramePipe:
         if self._result is not None:
             return self._result
         self.stdout.close()
-        status = self.process.wait()
-        self._reader.join()
+        try:
+            status = self.process.wait(timeout=60)
+        except subprocess.TimeoutExpired:
+            try:
+                self.process.kill()
+            except ProcessLookupError:
+                pass
+            try:
+                status = self.process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                status = -1
+        self._reader.join(timeout=5)
+        if self._reader.is_alive():
+            status = -1
         summary = bytes(self._tail)
         if self._total > self.stderr_limit:
             prefix = ('[stderr truncated: %d bytes total; tail follows]\n' % self._total).encode()
